@@ -3,6 +3,8 @@
 
 #include <QMainWindow>
 
+class SlackClient;
+
 namespace Ui {
 class MainWindow;
 }
@@ -20,8 +22,11 @@ private slots:
 
     void on_pushButton_2_clicked();
 
+    void on_pushButton_3_clicked();
+
 private:
     Ui::MainWindow *ui;
+    SlackClient *client;
 };
 
 #endif // MAINWINDOW_H

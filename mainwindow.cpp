@@ -3,13 +3,16 @@
 
 #include "slackclient.h"
 
-SlackClient *hack;
-
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    client = new SlackClient(this);
+    connect(client, &SlackClient::authenticated, [this]() {
+        ui->pushButton_2->setEnabled(true);
+        ui->pushButton_3->setEnabled(true);
+    });
 }
 
 MainWindow::~MainWindow()
@@ -19,10 +22,17 @@ MainWindow::~MainWindow()
 
 void MainWindow::on_pushButton_clicked()
 {
-    hack = new SlackClient(this);
+    client->login();
 }
 
 void MainWindow::on_pushButton_2_clicked()
 {
-    hack->fire();
+    client->fire();
+}
+
+void MainWindow::on_pushButton_3_clicked()
+{
+    for (SlackConversation &conv: client->conversations()) {
+        qDebug() << conv.id << "\t" << conv.name;
+    }
 }
