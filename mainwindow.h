@@ -8,6 +8,7 @@ class SlackMessage;
 
 class QListWidgetItem;
 class QSystemTrayIcon;
+class QTextCursor;
 
 namespace Ui {
 class MainWindow;
@@ -35,6 +36,9 @@ private slots:
     void on_actionLogin_triggered();
 
 private:
+
+    void renderMessage(QTextCursor &cursor, const SlackMessage &message);
+
     Ui::MainWindow *ui;
     SlackClient *client;
     QString currentChannel;

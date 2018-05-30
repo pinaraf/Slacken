@@ -6,7 +6,7 @@
 
 static const char *clientId = "3457590858.328048934181";
 static const char *clientSecret = "673a852137cc6a09717d39c480c3d88f";
-static const char *verificationToken = "wOYGN5tkgAYH69WK963i0eO4";
+//static const char *verificationToken = "wOYGN5tkgAYH69WK963i0eO4";
 
 SlackClient::SlackClient(QObject *parent) : QObject(parent)
 {
@@ -204,14 +204,29 @@ SlackUser::SlackUser(const QJsonValueRef &sourceRef)
     is_deleted  = source["is_deleted"].toBool();
 }
 
+SlackMessageAttachment::SlackMessageAttachment(const QJsonObject &source)
+{
+    color = QColor(QString("#%1").arg(source["color"].toString()));
+    text = source["text"].toString();
+    fallback = source["fallback"].toString();
+    title = source["title"].toString();
+}
+
 SlackMessage::SlackMessage(const QJsonObject &source)
 {
+    qDebug() << "Building message from " << source;
     type = source["type"].toString();
     user = source["user"].toString();
     text = source["text"].toString();
     QString ts = source["ts"].toString();
-//    qDebug() << ts << ts.toInt();
     when = QDateTime::fromTime_t(ts.toDouble());
+    username = source["username"].toString();
+
+    if (source.contains("attachments")) {
+        for (auto &&attachment: source["attachments"].toArray()) {
+            attachments.emplace_back(SlackMessageAttachment(attachment.toObject()));
+        }
+    }
 }
 
 SlackMessage::SlackMessage(const QString &user, const QString &msg)

@@ -11,6 +11,7 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
     tray = new QSystemTrayIcon(this);
+    tray->show();
     client = new SlackClient(this);
     connect(client, &SlackClient::authenticated, [this]() {
         client->fire();
@@ -47,6 +48,42 @@ void MainWindow::on_channelListWidget_itemClicked(QListWidgetItem *item)
     ui->newMessage->setFocus();
 }
 
+void MainWindow::renderMessage(QTextCursor &cursor, const SlackMessage &message)
+{
+    QString userDisplay = "\t<%1>\t";
+    if (!message.user.isEmpty()) {
+        auto user = client->user(message.user);
+        userDisplay = userDisplay.arg(user.name);
+    } else if (!message.username.isEmpty()) {
+        userDisplay = userDisplay.arg(message.username);
+    }
+    cursor.insertText(message.when.toLocalTime().toString());
+    cursor.insertText(userDisplay);
+    cursor.insertText(message.text);
+    for (auto &attachment: message.attachments) {
+        QTextCharFormat fmt = cursor.charFormat();
+        QBrush foreground = fmt.foreground();
+        if (attachment.color.isValid()) {
+            fmt.setForeground(attachment.color);
+            cursor.setCharFormat(fmt);
+        }
+        if (!attachment.title.isEmpty()) {
+            qDebug() << "TITLE";
+            cursor.insertText(attachment.title);
+            if (!attachment.text.isEmpty()) {
+                cursor.insertBlock();
+            }
+            cursor.insertText("\t\t");
+        }
+        cursor.insertText(attachment.text);
+        if (attachment.color.isValid()) {
+            fmt.setForeground(foreground);
+            cursor.setCharFormat(fmt);
+        }
+    }
+    cursor.insertBlock();
+}
+
 void MainWindow::channelHistoryAvailable(const QList<SlackMessage> &messages)
 {
     qDebug() << "Received !";
@@ -54,15 +91,7 @@ void MainWindow::channelHistoryAvailable(const QList<SlackMessage> &messages)
     auto cursor = ui->historyView->textCursor();
     cursor.movePosition(QTextCursor::End);
     for (const SlackMessage &message: messages) {
-        QString userDisplay = "  <?>  ";
-        if (!message.user.isEmpty()) {
-            auto user = client->user(message.user);
-            userDisplay = QString("  <%1>  ").arg(user.name);
-        }
-        cursor.insertText(message.when.toLocalTime().toString());
-        cursor.insertText(userDisplay);
-        cursor.insertText(message.text);
-        cursor.insertBlock();
+        renderMessage(cursor, message);
         cursor.movePosition(QTextCursor::NextBlock);
     }
 }
@@ -80,15 +109,7 @@ void MainWindow::newMessageArrived(const QString &channel, const SlackMessage &m
     if (channel == currentChannel) {
         auto cursor = ui->historyView->textCursor();
         cursor.movePosition(QTextCursor::Start);
-        QString userDisplay = "  <?>  ";
-        if (!message.user.isEmpty()) {
-            auto user = client->user(message.user);
-            userDisplay = QString("  <%1>  ").arg(user.name);
-        }
-        cursor.insertText(message.when.toLocalTime().toString());
-        cursor.insertText(userDisplay);
-        cursor.insertText(message.text);
-        cursor.insertBlock();
+        renderMessage(cursor, message);
         cursor.movePosition(QTextCursor::NextBlock);
     } else {
         // Find the matching item, and change its color

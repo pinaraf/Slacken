@@ -3,7 +3,9 @@
 
 #include <QObject>
 #include <QtNetworkAuth>
+#include <QColor>
 #include <QMap>
+#include <vector>
 
 class QWebSocket;
 
@@ -15,7 +17,6 @@ class SlackChannel
 public:
     SlackChannel(SlackClient *client, const QJsonValueRef &source);
 
-//private:
     QDateTime created;
     QString id;
     QString name;
@@ -34,10 +35,21 @@ class SlackUser
 public:
     SlackUser(const QJsonValueRef &source);
 
-//private:
     QString id;
     QString name;
     bool is_deleted;
+};
+
+class SlackMessageAttachment
+{
+    Q_GADGET
+public:
+    SlackMessageAttachment(const QJsonObject &source);
+
+    QColor color;
+    QString text;
+    QString fallback;
+    QString title;
 };
 
 class SlackMessage
@@ -49,8 +61,11 @@ public:
 
     QString type;
     QString user;
+    QString username;   // Seriously slack ?
     QString text;
     QDateTime when;
+
+    std::vector<SlackMessageAttachment> attachments;
 };
 
 class SlackClient : public QObject
