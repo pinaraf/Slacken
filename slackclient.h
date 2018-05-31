@@ -75,8 +75,8 @@ public:
     explicit SlackClient(QObject *parent = nullptr);
     void fire();
 
-    QList<SlackChannel> channels() const;
-    QList<SlackUser> users() const;
+    const std::map<QString, SlackChannel> &channels() const;
+    const std::map<QString, SlackUser> &users() const;
 
     const SlackUser &user(const QString &id) const;
 
@@ -99,8 +99,8 @@ private:
     QWebSocket *chaussette;
     int socketMessageId;
     QOAuth2AuthorizationCodeFlow oauth2;
-    QMap<QString, SlackChannel> m_channels;
-    QMap<QString, SlackUser> m_users;
+    std::map<QString, SlackChannel> m_channels;
+    std::map<QString, SlackUser> m_users;
 };
 
 #endif // SLACKCLIENT_H

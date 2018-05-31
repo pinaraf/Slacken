@@ -36,7 +36,7 @@ private slots:
     void on_actionLogin_triggered();
 
 private:
-
+    void renderText(QTextCursor &cursor, const QString &text);
     void renderMessage(QTextCursor &cursor, const SlackMessage &message);
 
     Ui::MainWindow *ui;

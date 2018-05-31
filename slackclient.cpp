@@ -68,32 +68,30 @@ void SlackClient::fire() {
     connect(reply, &QNetworkReply::finished, [this, reply]() {
         qDebug() << "Reply finished !";
         qDebug() << reply->errorString();
-        QString whole_doc = reply->readAll();
-        //qDebug() << whole_doc;
         qDebug() << oauth2.state();
 
-        auto doc = QJsonDocument::fromJson(whole_doc.toUtf8());
+        auto doc = QJsonDocument::fromJson(reply->readAll());
 
         selfId = doc["self"].toObject()["id"].toString();
         // Instanciate each channel and user
         for (const QJsonValueRef &user: doc["users"].toArray()) {
             emit userAdded(
-                m_users.insert(user.toObject()["id"].toString(), SlackUser(user)).value()
+                m_users.emplace(user.toObject()["id"].toString(), SlackUser(user)).first->second
             );
         }
         for (const QJsonValueRef &channel: doc["channels"].toArray()) {
             emit channelAdded(
-                m_channels.insert(channel.toObject()["id"].toString(), SlackChannel(this, channel)).value()
+                m_channels.emplace(channel.toObject()["id"].toString(), SlackChannel(this, channel)).first->second
             );
         }
         for (const QJsonValueRef &channel: doc["groups"].toArray()) {
             emit channelAdded(
-                m_channels.insert(channel.toObject()["id"].toString(), SlackChannel(this, channel)).value()
+                m_channels.emplace(channel.toObject()["id"].toString(), SlackChannel(this, channel)).first->second
             );
         }
         for (const QJsonValueRef &channel: doc["ims"].toArray()) {
             emit channelAdded(
-                m_channels.insert(channel.toObject()["id"].toString(), SlackChannel(this, channel)).value()
+                m_channels.emplace(channel.toObject()["id"].toString(), SlackChannel(this, channel)).first->second
             );
         }
 
@@ -129,12 +127,12 @@ void SlackClient::fire() {
 
 const SlackUser & SlackClient::user(const QString &id) const
 {
-    return m_users.find(id).value();
+    return m_users.find(id)->second;
 }
 
-QList<SlackChannel> SlackClient::channels() const
+const std::map<QString, SlackChannel> &SlackClient::channels() const
 {
-    return m_channels.values();
+    return m_channels;
 }
 
 void SlackClient::requestHistory(const QString &id)
@@ -219,7 +217,8 @@ SlackMessage::SlackMessage(const QJsonObject &source)
     user = source["user"].toString();
     text = source["text"].toString();
     QString ts = source["ts"].toString();
-    when = QDateTime::fromTime_t(ts.toDouble());
+    double timespec = ts.toDouble();
+    when = QDateTime::fromMSecsSinceEpoch(1000 * timespec);
     username = source["username"].toString();
 
     if (source.contains("attachments")) {
