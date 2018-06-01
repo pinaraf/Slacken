@@ -205,7 +205,7 @@ SlackChannel::SlackChannel(SlackClient *client, const QJsonValueRef &sourceRef)
     id          = source["id"].toString();
     if (source.contains("is_im") && source["is_im"].toBool()) {
         is_im = true;
-        is_member = true;
+        is_member = source["is_open"].toBool();;
         is_channel = false;
         is_group = false;
         name = client->user(source["user"].toString()).name;
