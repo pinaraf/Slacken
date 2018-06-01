@@ -13,8 +13,9 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
     tray = new QSystemTrayIcon(this);
+    tray->setIcon(this->windowIcon());
     tray->show();
-    connect(tray, &QSystemTrayIcon::activated, [this](QSystemTrayIcon::ActivationReason reason) {
+    connect(tray, &QSystemTrayIcon::activated, [this](QSystemTrayIcon::ActivationReason) {
         this->show();
     });
     client = new SlackClient(this);

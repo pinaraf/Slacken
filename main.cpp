@@ -8,6 +8,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("slacken");
     a.setApplicationName("slacken");
     a.setApplicationVersion("0.1-alpha");
+    a.setQuitOnLastWindowClosed(false);
     MainWindow w;
     w.show();
 
