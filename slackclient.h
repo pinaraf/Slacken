@@ -79,10 +79,13 @@ public:
     const std::map<QString, SlackUser> &users() const;
 
     const SlackUser &user(const QString &id) const;
+    QString userId(const QString &userName) const;
 
     void requestHistory(const QString &id);
 
     void sendMessage(const QString &channel, const QString &msg);
+
+    QString currentToken() const;
 signals:
     void authenticated();
     void channelAdded(const SlackChannel &channel);
@@ -92,7 +95,7 @@ signals:
 
     void newMessage(const QString &channel, const SlackMessage &msg);
 public slots:
-    void login();
+    void login(const QString &existingToken);
 
 private:
     QString selfId;

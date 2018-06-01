@@ -5,6 +5,7 @@
 
 #include <QSystemTrayIcon>
 #include <QRegularExpression>
+#include <QMessageBox>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -18,6 +19,10 @@ MainWindow::MainWindow(QWidget *parent) :
     });
     client = new SlackClient(this);
     connect(client, &SlackClient::authenticated, [this]() {
+        QSettings settings;
+        settings.beginGroup("auth");
+        settings.setValue("token", client->currentToken());
+        settings.sync();
         client->fire();
     });
     connect(client, &SlackClient::channelAdded, [this](const SlackChannel &chan) {
@@ -55,15 +60,27 @@ void MainWindow::on_channelListWidget_itemClicked(QListWidgetItem *item)
 void MainWindow::renderText(QTextCursor &cursor, const QString &text)
 {
     QString output = text;
-#if 0
-    QRegularExpression formatDelimiter("(<|\\*|_)");
+#if 1
+    QRegularExpression formatDelimiter("(<@(\\w+)>)");
     int currentIdx = 0;
     int pos;
-    while ((pos = output.indexOf(formatDelimiter, currentIdx)) != -1) {
-        cursor.insertText(text.mid(currentIdx, pos - 1));
-        cursor.insertText("WHAAAHW");
-        currentIdx = pos + 1;
+    QRegularExpressionMatch match;
+    while ((pos = output.indexOf(formatDelimiter, currentIdx, &match)) != -1) {
+        //qDebug() << "In " << text << " from currentIdx=" << currentIdx << " ==> " << text.mid(currentIdx);
+        pos = match.capturedStart(1);
+        cursor.insertText(text.mid(currentIdx, pos - currentIdx));
+        auto charFormat = cursor.charFormat();
+        auto backupCharFormat = cursor.charFormat();
+        charFormat.setFontWeight(QFont::Bold);
+        cursor.setCharFormat(charFormat);
+        auto &user = client->user(match.captured(2));
+        cursor.insertText("@");
+        cursor.insertText(user.name);
+        cursor.setCharFormat(backupCharFormat);
+
+        currentIdx = pos + 1 + match.capturedLength(1) - 1;
     }
+    //qDebug() << "In " << text << " remainder from " << currentIdx << " ==> " << text.mid(currentIdx);
     cursor.insertText(text.mid(currentIdx));
 #else
     QRegularExpression regexUser("<@(\\w+)>");
@@ -140,7 +157,27 @@ void MainWindow::channelHistoryAvailable(const QList<SlackMessage> &messages)
 void MainWindow::on_newMessage_returnPressed()
 {
     qDebug() << "Sending " << ui->newMessage->text() << " to " << currentChannel;
-    client->sendMessage(currentChannel, ui->newMessage->text());
+    QString msg = ui->newMessage->text();
+
+    // Trying to match @XXX to users
+    QRegularExpression userRegex("(?:\\W|^)(@\\w+)(?:\\W|$)");
+    QRegularExpressionMatch match;
+    int offset = 0;
+    while ((match = userRegex.match(msg, offset)).hasMatch()) {
+        //qDebug() << match.capturedTexts();
+        QString id = client->userId(match.captured(1).mid(1));
+        if (!id.isNull()) {
+            msg = QString("%1<@%2>%3")
+                    .arg(msg.mid(0, match.capturedStart(1)))
+                    .arg(id)
+                    .arg(msg.mid(match.capturedEnd(1)));
+            offset = match.capturedStart() + id.length();
+        } else {
+            offset = match.capturedEnd();
+        }
+    }
+    //qDebug() << msg;
+    client->sendMessage(currentChannel, msg);
     ui->newMessage->clear();
 }
 
@@ -172,5 +209,13 @@ void MainWindow::on_actionQuit_triggered()
 
 void MainWindow::on_actionLogin_triggered()
 {
-    client->login();
+    QSettings settings;
+    settings.beginGroup("auth");
+    if (settings.contains("token")) {
+        client->login(settings.value("token").toString());
+    } else {
+        QMessageBox::information(this, "OAuth authentication", "A new webbrowser window will open for you to login. It will contact Slacken back on the loopback for authentication purpose.\n"
+                                                               "Make sure extensions like NoScript won't block that as a XSS attack.");
+        client->login(QString());
+    }
 }

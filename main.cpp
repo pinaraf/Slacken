@@ -5,7 +5,9 @@
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
-    qDebug() << "Coucou !";
+    a.setOrganizationName("slacken");
+    a.setApplicationName("slacken");
+    a.setApplicationVersion("0.1-alpha");
     MainWindow w;
     w.show();
 

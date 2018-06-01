@@ -36,7 +36,7 @@ SlackClient::SlackClient(QObject *parent) : QObject(parent)
     });
     connect(&oauth2, &QOAuth2AuthorizationCodeFlow::authorizeWithBrowser, [](const QUrl &url) {
         qDebug() << "Open " << url;
-        // QDesktopServices::openUrl(url);
+        QDesktopServices::openUrl(url);
     });
 
     connect(this, &SlackClient::authenticated, this, [this]() {
@@ -59,11 +59,28 @@ SlackClient::SlackClient(QObject *parent) : QObject(parent)
     });
 }
 
-void SlackClient::login() {
-    oauth2.grant();
+void SlackClient::login(const QString &existingToken) {
+    if (existingToken.isEmpty()) {
+        oauth2.grant();
+    } else {
+        // Look me ma, I'm a hack
+        oauth2.setToken(existingToken);
+        emit authenticated();
+    }
+}
+
+QString SlackClient::currentToken() const {
+    return oauth2.token();
 }
 
 void SlackClient::fire() {
+    auto testCount = oauth2.get(QUrl("https://slack.com/api/users.counts"));
+    connect(testCount, &QNetworkReply::finished, [testCount]() {
+        auto doc = QJsonDocument::fromJson(testCount->readAll());
+        QFile f("/tmp/slack.sucks.json");
+        f.open(QIODevice::WriteOnly);
+        f.write(doc.toJson(QJsonDocument::Indented));
+    });
     auto reply = oauth2.get(QUrl("https://slack.com/api/rtm.start"));
     connect(reply, &QNetworkReply::finished, [this, reply]() {
         qDebug() << "Reply finished !";
@@ -128,6 +145,15 @@ void SlackClient::fire() {
 const SlackUser & SlackClient::user(const QString &id) const
 {
     return m_users.find(id)->second;
+}
+
+QString SlackClient::userId(const QString &nick) const
+{
+    for (auto &user: m_users) {
+        if (user.second.name == nick)
+            return user.second.id;
+    }
+    return QString();
 }
 
 const std::map<QString, SlackChannel> &SlackClient::channels() const
