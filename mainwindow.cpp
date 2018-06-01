@@ -6,6 +6,7 @@
 #include <QSystemTrayIcon>
 #include <QRegularExpression>
 #include <QMessageBox>
+#include <QDesktopServices>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -67,38 +68,48 @@ void MainWindow::on_channelListWidget_itemClicked(QListWidgetItem *item)
 void MainWindow::renderText(QTextCursor &cursor, const QString &text)
 {
     QString output = text;
-#if 1
-    QRegularExpression formatDelimiter("(<@(\\w+)>)");
+
+    QRegularExpression formatDelimiter("(?:\\W|^)(<([^>]+)>)(?:\\W|$)");
     int currentIdx = 0;
     int pos;
     QRegularExpressionMatch match;
     while ((pos = output.indexOf(formatDelimiter, currentIdx, &match)) != -1) {
-        //qDebug() << "In " << text << " from currentIdx=" << currentIdx << " ==> " << text.mid(currentIdx);
         pos = match.capturedStart(1);
         cursor.insertText(text.mid(currentIdx, pos - currentIdx));
-        auto charFormat = cursor.charFormat();
         auto backupCharFormat = cursor.charFormat();
-        charFormat.setFontWeight(QFont::Bold);
-        cursor.setCharFormat(charFormat);
-        auto &user = client->user(match.captured(2));
-        cursor.insertText("@");
-        cursor.insertText(user.name);
+
+        QStringRef capturedPart = match.capturedRef(2);
+
+        if (capturedPart.startsWith('@')) {
+            QString userId = capturedPart.mid(1).toString();
+            auto charFormat = cursor.charFormat();
+            charFormat.setFontWeight(QFont::Bold);
+            cursor.setCharFormat(charFormat);
+            auto &user = client->user(userId);
+            cursor.insertText("@");
+            cursor.insertText(user.name);
+        } else if (capturedPart.startsWith("http")) {
+            // This is a link !
+            auto charFormat = cursor.charFormat();
+            charFormat.setForeground(QBrush(QColor(0, 0, 255)));
+            charFormat.setAnchorHref(capturedPart.mid(0, capturedPart.indexOf('|')).toString());
+            cursor.setCharFormat(charFormat);
+
+            if (capturedPart.contains('|')) {
+                cursor.insertText(capturedPart.mid(capturedPart.indexOf('|')).toString());
+            } else {
+                cursor.insertText(capturedPart.toString());
+            }
+        } else {
+            // We don't know
+            cursor.insertText(capturedPart.toString());
+        }
+
         cursor.setCharFormat(backupCharFormat);
 
         currentIdx = pos + 1 + match.capturedLength(1) - 1;
     }
-    //qDebug() << "In " << text << " remainder from " << currentIdx << " ==> " << text.mid(currentIdx);
     cursor.insertText(text.mid(currentIdx));
-#else
-    QRegularExpression regexUser("<@(\\w+)>");
-    QRegularExpressionMatch userMatch;
-    while (output.contains(regexUser, &userMatch)) {
-        qDebug() << "Found " << userMatch.captured() << userMatch.captured(1);
-        auto &user = client->user(userMatch.captured(1));
-        output.replace(userMatch.captured(), user.name);
-    }
-    cursor.insertText(output);
-#endif
 }
 
 void MainWindow::renderMessage(QTextCursor &cursor, const SlackMessage &message)
@@ -225,4 +236,9 @@ void MainWindow::on_actionLogin_triggered()
                                                                "Make sure extensions like NoScript won't block that as a XSS attack.");
         client->login(QString());
     }
+}
+
+void MainWindow::on_historyView_anchorClicked(const QUrl &url)
+{
+    QDesktopServices::openUrl(url);
 }

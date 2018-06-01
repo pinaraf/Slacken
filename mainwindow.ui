@@ -72,6 +72,9 @@
             <family>Monospace</family>
            </font>
           </property>
+          <property name="openLinks">
+           <bool>false</bool>
+          </property>
          </widget>
         </item>
         <item>

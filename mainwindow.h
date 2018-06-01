@@ -35,6 +35,8 @@ private slots:
 
     void on_actionLogin_triggered();
 
+    void on_historyView_anchorClicked(const QUrl &arg1);
+
 private:
     void renderText(QTextCursor &cursor, const QString &text);
     void renderMessage(QTextCursor &cursor, const SlackMessage &message);
