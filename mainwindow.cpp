@@ -54,6 +54,12 @@ void MainWindow::on_channelListWidget_itemClicked(QListWidgetItem *item)
     qDebug() << "Switching to " << currentChannel;
     client->requestHistory(currentChannel);
     item->setTextColor(QPalette().windowText().color());
+    ui->topicViewer->clear();
+    auto chanIt = client->channels().find(currentChannel);
+    if (chanIt != client->channels().end()) {
+        auto cursor = ui->topicViewer->textCursor();
+        renderText(cursor, chanIt->second.topic);
+    }
     ui->newMessage->setFocus();
 }
 

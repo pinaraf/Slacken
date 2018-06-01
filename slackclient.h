@@ -20,6 +20,7 @@ public:
     QDateTime created;
     QString id;
     QString name;
+    QString topic;
     bool is_group;
     bool is_im;
     bool is_channel;

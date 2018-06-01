@@ -218,6 +218,11 @@ SlackChannel::SlackChannel(SlackClient *client, const QJsonValueRef &sourceRef)
         if (is_group)
             is_member = source["is_open"].toBool();
     }
+
+    if (source.contains("topic")) {
+        auto topicObject = source["topic"].toObject();
+        topic = topicObject["value"].toString();
+    }
 }
 
 SlackUser::SlackUser(const QJsonValueRef &sourceRef)
