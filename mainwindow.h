@@ -23,14 +23,15 @@ public:
     ~MainWindow();
 
 private slots:
+    void channelHistoryAvailable(const QList<SlackMessage> &messages);
+    void newMessageArrived(const QString &channel, const SlackMessage &msg);
+    void desktopNotificationArrived(const QString &title, const QString &subtitle, const QString &msg);
 
     void on_channelListWidget_itemClicked(QListWidgetItem *item);
 
-    void channelHistoryAvailable(const QList<SlackMessage> &messages);
 
     void on_newMessage_returnPressed();
 
-    void newMessageArrived(const QString &channel, const SlackMessage &msg);
     void on_actionQuit_triggered();
 
     void on_actionLogin_triggered();

@@ -131,6 +131,8 @@ void SlackClient::fire() {
             if (doc["type"] == "message") {
                 qDebug() << "Emitting a message";
                 emit(newMessage(doc["channel"].toString(), SlackMessage(doc.object())));
+            } else if (doc["type"] == "desktop_notification") {
+                emit(desktopNotification(doc["title"].toString(), doc["subtitle"].toString(), doc["content"].toString()));
             }
             /*if (doc["type"] == "hello")
                 chaussette->sendTextMessage("{\"id\": 1, \"type\": \"message\", \"channel\": \"D4EPF2N22\", \"text\": \"LA CHAUSSETTE PARLE !\"}");*/

@@ -43,6 +43,7 @@ MainWindow::MainWindow(QWidget *parent) :
     });
     connect(client, &SlackClient::channelHistory, this, &MainWindow::channelHistoryAvailable);
     connect(client, &SlackClient::newMessage, this, &MainWindow::newMessageArrived);
+    connect(client, &SlackClient::desktopNotification, this, &MainWindow::desktopNotificationArrived);
 }
 
 MainWindow::~MainWindow()
@@ -199,6 +200,11 @@ void MainWindow::on_newMessage_returnPressed()
     ui->newMessage->clear();
 }
 
+void MainWindow::desktopNotificationArrived(const QString &title, const QString &subtitle, const QString &msg)
+{
+    tray->showMessage(title + " / " + subtitle, msg);
+}
+
 void MainWindow::newMessageArrived(const QString &channel, const SlackMessage &message)
 {
     qDebug() << "Received message on " << channel << " while on " << currentChannel;
@@ -214,7 +220,7 @@ void MainWindow::newMessageArrived(const QString &channel, const SlackMessage &m
             QListWidgetItem *chanItem = ui->channelListWidget->item(i);
             if (chanItem->data(Qt::UserRole + 42).toString() == channel) {
                 chanItem->setTextColor(QColor(255, 0, 0));
-                tray->showMessage("New message", QString("Received a new message in %1").arg(chanItem->text()));
+                //tray->showMessage("New message", QString("Received a new message in %1").arg(chanItem->text()));
             }
         }
     }

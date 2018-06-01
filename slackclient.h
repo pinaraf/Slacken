@@ -95,6 +95,8 @@ signals:
     void channelHistory(const QList<SlackMessage> &history);
 
     void newMessage(const QString &channel, const SlackMessage &msg);
+
+    void desktopNotification(const QString &title, const QString &subtitle, const QString &message);
 public slots:
     void login(const QString &existingToken);
 
