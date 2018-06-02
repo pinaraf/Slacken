@@ -21,6 +21,7 @@ public:
     SlackChannel(SlackClient *client, const QJsonValueRef &source);
 
     QDateTime created;
+    QDateTime last_read;
     QString id;
     QString name;
     QString topic;

@@ -184,7 +184,13 @@ void MainWindow::channelHistoryAvailable(const QList<SlackMessage> &messages)
     std::sort(sorted_messages.begin(), sorted_messages.end(), [] (const SlackMessage &msgA, const SlackMessage &msgB) {
         return msgA.when < msgB.when;
     });
+    bool crossedMark = !currentChannel->last_read.isValid();
     for (const SlackMessage &message: sorted_messages) {
+        if (!crossedMark && (message.when > currentChannel->last_read)) {
+            qDebug() << "INSERTING HTML " << crossedMark << message.when << currentChannel->last_read;
+            cursor.insertHtml("<hr></hr>");
+            crossedMark = true;
+        }
         renderMessage(cursor, message);
         cursor.movePosition(QTextCursor::NextBlock);
     }
@@ -236,7 +242,7 @@ void MainWindow::newMessageArrived(const QString &channel, const SlackMessage &m
         cursor.movePosition(QTextCursor::NextBlock);
         ui->historyView->setTextCursor(cursor);
         // TODO : some focus jumble mumble : if window is not focused, don't mark read, wait until it is really seen/acted upon
-        currentChannel->markRead(message);
+        /////// currentChannel->markRead(message);
     }
 }
 

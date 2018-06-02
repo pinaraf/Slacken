@@ -10,7 +10,6 @@ static const char *clientSecret = "673a852137cc6a09717d39c480c3d88f";
 
 SlackClient::SlackClient(QObject *parent) : QObject(parent)
 {
-    qDebug() << "Coucou le monde";
     auto replyHandler = new QOAuthHttpServerReplyHandler(1337, this);
     oauth2.setClientIdentifier(clientId);
     oauth2.setClientIdentifierSharedKey(clientSecret);
@@ -38,25 +37,6 @@ SlackClient::SlackClient(QObject *parent) : QObject(parent)
         qDebug() << "Open " << url;
         QDesktopServices::openUrl(url);
     });
-
-    connect(this, &SlackClient::authenticated, this, [this]() {
-        //this->listConversations();
-
-        qDebug() << "State dump ";
-        // QOAuth2AuthorizationCodeFlow : none
-        // QAbstractOAuth2
-        qDebug() << oauth2.clientIdentifierSharedKey();
-        qDebug() << oauth2.expirationAt();
-        qDebug() << oauth2.refreshToken();
-        qDebug() << oauth2.state();
-        // QAbstractOAuth
-        qDebug() << oauth2.clientIdentifier();
-        qDebug() << oauth2.extraTokens();
-        qDebug() << oauth2.responseType();
-        qDebug() << static_cast<int>(oauth2.status());
-        qDebug() << oauth2.token();
-        qDebug() << "End of state dump";
-    });
 }
 
 void SlackClient::login(const QString &existingToken) {
@@ -78,24 +58,19 @@ void SlackClient::fetchCounts() {
     connect(replyCount, &QNetworkReply::finished, [this, replyCount]() {
         auto doc = QJsonDocument::fromJson(replyCount->readAll());
 
-        for (const QJsonValueRef &channel: doc["channels"].toArray()) {
-            auto &&channelObj = channel.toObject();
-            auto it = m_channels.find(channelObj["id"].toString());
-            if (it != m_channels.end()) {
-                it->second->setUnreadCount(channelObj["unread_count_display"].toInt());
+        auto setUnreads = [&] (const QString &listPath) {
+            for (const QJsonValueRef &channel: doc[listPath].toArray()) {
+                auto &&channelObj = channel.toObject();
+                auto it = m_channels.find(channelObj["id"].toString());
+                if (it != m_channels.end()) {
+                    it->second->setUnreadCount(channelObj["unread_count_display"].toInt());
+                }
             }
-        }
-        /*
-        for (const QJsonValueRef &channel: doc["groups"].toArray()) {
-            emit channelAdded(
-                m_channels.emplace(channel.toObject()["id"].toString(), SlackChannel(this, channel)).first->second
-            );
-        }
-        for (const QJsonValueRef &channel: doc["ims"].toArray()) {
-            emit channelAdded(
-                m_channels.emplace(channel.toObject()["id"].toString(), SlackChannel(this, channel)).first->second
-            );
-        }*/
+        };
+
+        setUnreads("channels");
+        setUnreads("groups");
+        setUnreads("ims");
     });
 }
 
@@ -224,7 +199,7 @@ void SlackClient::sendMessage(const QString &channel, const QString &msgText)
 void SlackClient::markChannelRead(const QString &channelType, const QString &channel, const QDateTime &lastTimestamp) {
     QVariantMap query;
     query.insert("channel", channel);
-    query.insert("ts", lastTimestamp.toMSecsSinceEpoch() / 1000. + 1000);   // The +1000 is working around lack of 'precision' when using QDateTime
+    query.insert("ts", lastTimestamp.toMSecsSinceEpoch() / 1000. + 0.1);   // The +0.1 is working around lack of 'precision' when using QDateTime
                                                                             // When writing an IM program, ALWAYS use microseconds precision, everybody knows that, right ?
     QUrl url("https://slack.com/api/channels.mark");
     if (channelType == "im")
@@ -278,6 +253,12 @@ SlackChannel::SlackChannel(SlackClient *client, const QJsonValueRef &sourceRef)
         topic = topicObject["value"].toString();
     }
 
+    if (source.contains("last_read")) {
+        last_read = QDateTime::fromMSecsSinceEpoch(source["last_read"].toString().toDouble() * 1000 + 1000);
+    } else {
+        last_read = QDateTime();
+    }
+
     unreadCount = 0;
 }
 
@@ -290,6 +271,7 @@ void SlackChannel::setUnreadCount(int unread) {
 
 void SlackChannel::markRead(const SlackMessage &message) {
     // Todo : call API in client....
+    qDebug() << "Mark read after " << message.when.toMSecsSinceEpoch() / 1000.;
     SlackClient* client = static_cast<SlackClient*>(parent());
     if (is_channel)
         client->markChannelRead("channel", id, message.when);
@@ -300,6 +282,7 @@ void SlackChannel::markRead(const SlackMessage &message) {
     else if (is_mpim)
         client->markChannelRead("mpim", id, message.when);
 
+    last_read = message.when;
     setUnreadCount(0);
 }
 
