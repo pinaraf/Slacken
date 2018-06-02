@@ -18,10 +18,17 @@ But it is easier to put it here on github...
 Dependencies, installation...
 -----------------------------
 
-It's 0.1 pre-alpha1 state. So I will not dare provide binary packages. It requires Qt 5.9+ (maybe less, if you want to try) and QtNetworkAuth.
+It's 0.1 pre-alpha1 state. So I will not dare provide binary packages. 
+
+It requires Qt 5.9+ (maybe less, if you want to try) and QtNetworkAuth.
+
+On debian, it's basically ```apt install libqt5websockets5-dev qt5-default qt5-qmake```.
 QtNetworkAuth is pending debian packaging, so you will have to clone it from https://github.com/qt/qtnetworkauth and make/make install it.
 
-Then building this project is as easy as mkdir build && cd build && qmake .. && make -j 42
+This application is built (so far) with QtWidgets, so it should look ~nice~ non alien on most systems (install qt5-gtk-platform-theme if you use gnome...)
+
+
+Building this project is as easy as mkdir build && cd build && qmake .. && make -j 42
 
 And running... well ./Slacken, obviously.
 
