@@ -4,6 +4,7 @@
 #include <QMainWindow>
 
 class SlackClient;
+class SlackChannel;
 class SlackMessage;
 
 class QListWidgetItem;
@@ -29,7 +30,6 @@ private slots:
 
     void on_channelListWidget_itemClicked(QListWidgetItem *item);
 
-
     void on_newMessage_returnPressed();
 
     void on_actionQuit_triggered();
@@ -38,13 +38,17 @@ private slots:
 
     void on_historyView_anchorClicked(const QUrl &arg1);
 
+    void on_splitter_splitterMoved(int pos, int index);
+
+    void on_historyView_highlighted(const QString &arg1);
+
 private:
     void renderText(QTextCursor &cursor, const QString &text);
     void renderMessage(QTextCursor &cursor, const SlackMessage &message);
 
     Ui::MainWindow *ui;
     SlackClient *client;
-    QString currentChannel;
+    SlackChannel *currentChannel;
     QSystemTrayIcon *tray;
 };
 

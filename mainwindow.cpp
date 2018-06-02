@@ -13,6 +13,10 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    QSettings settings;
+    settings.beginGroup("layout");
+    if (settings.contains("splitter"))
+        ui->splitter->restoreState(settings.value("splitter").toByteArray());
     tray = new QSystemTrayIcon(this);
     tray->setIcon(this->windowIcon());
     tray->show();
@@ -25,18 +29,34 @@ MainWindow::MainWindow(QWidget *parent) :
         settings.beginGroup("auth");
         settings.setValue("token", client->currentToken());
         settings.sync();
-        client->fire();
+        client->start();
     });
-    connect(client, &SlackClient::channelAdded, [this](const SlackChannel &chan) {
-        if (chan.is_member) {
-            QString display = chan.name;
-            if (chan.is_channel)
-                display = QString("#%1").arg(chan.name);
-            else if (chan.is_group)
-                display = QString("&%1").arg(chan.name);
-            qDebug() << display << chan.is_im << chan.is_channel << chan.is_group;
+    connect(client, &SlackClient::channelAdded, [this](SlackChannel *chan) {
+        if (chan->is_member) {
+            QString display = chan->name;
+            if (chan->is_channel)
+                display = QString("#%1").arg(chan->name);
+            else if (chan->is_group)
+                display = QString("&%1").arg(chan->name);
+            //qDebug() << display << chan.is_im << chan.is_channel << chan.is_group;
             auto item = new QListWidgetItem(display, ui->channelListWidget);
-            item->setData(Qt::UserRole + 42, chan.id);
+            item->setData(Qt::UserRole + 42, QVariant::fromValue(chan));
+            if (chan->unreadCount) {
+                auto font = item->font();
+                font.setWeight(QFont::Bold);
+                item->setFont(font);
+            }
+            connect(chan, &SlackChannel::unreadChanged, [item, chan]() {
+                if (chan->unreadCount) {
+                    auto font = item->font();
+                    font.setWeight(QFont::Bold);
+                    item->setFont(font);
+                } else {
+                    auto font = item->font();
+                    font.setWeight(QFont::Normal);
+                    item->setFont(font);
+                }
+            });
             ui->channelListWidget->addItem(item);
             ui->channelListWidget->sortItems();
         }
@@ -53,16 +73,15 @@ MainWindow::~MainWindow()
 
 void MainWindow::on_channelListWidget_itemClicked(QListWidgetItem *item)
 {
-    currentChannel = item->data(Qt::UserRole + 42).toString();
-    qDebug() << "Switching to " << currentChannel;
-    client->requestHistory(currentChannel);
+    currentChannel = item->data(Qt::UserRole + 42).value<SlackChannel*>();
+    qDebug() << "Switching to " << currentChannel->id;
+    client->requestHistory(currentChannel->id);
     item->setTextColor(QPalette().windowText().color());
     ui->topicViewer->clear();
-    auto chanIt = client->channels().find(currentChannel);
-    if (chanIt != client->channels().end()) {
-        auto cursor = ui->topicViewer->textCursor();
-        renderText(cursor, chanIt->second.topic);
-    }
+
+    auto cursor = ui->topicViewer->textCursor();
+    renderText(cursor, currentChannel->topic);
+
     ui->newMessage->setFocus();
 }
 
@@ -97,7 +116,7 @@ void MainWindow::renderText(QTextCursor &cursor, const QString &text)
             cursor.setCharFormat(charFormat);
 
             if (capturedPart.contains('|')) {
-                cursor.insertText(capturedPart.mid(capturedPart.indexOf('|')).toString());
+                cursor.insertText(capturedPart.mid(capturedPart.indexOf('|') + 1).toString());
             } else {
                 cursor.insertText(capturedPart.toString());
             }
@@ -170,6 +189,8 @@ void MainWindow::channelHistoryAvailable(const QList<SlackMessage> &messages)
         cursor.movePosition(QTextCursor::NextBlock);
     }
 
+    currentChannel->markRead(sorted_messages.last());
+
     ui->historyView->setTextCursor(cursor);
 }
 
@@ -196,7 +217,7 @@ void MainWindow::on_newMessage_returnPressed()
         }
     }
     //qDebug() << msg;
-    client->sendMessage(currentChannel, msg);
+    client->sendMessage(currentChannel->id, msg);
     ui->newMessage->clear();
 }
 
@@ -207,22 +228,15 @@ void MainWindow::desktopNotificationArrived(const QString &title, const QString 
 
 void MainWindow::newMessageArrived(const QString &channel, const SlackMessage &message)
 {
-    qDebug() << "Received message on " << channel << " while on " << currentChannel;
-    if (channel == currentChannel) {
+    qDebug() << "Received message on " << channel << " while on " << currentChannel->id;
+    if (channel == currentChannel->id) {
         auto cursor = ui->historyView->textCursor();
         cursor.movePosition(QTextCursor::End);
         renderMessage(cursor, message);
         cursor.movePosition(QTextCursor::NextBlock);
         ui->historyView->setTextCursor(cursor);
-    } else {
-        // Find the matching item, and change its color
-        for (int i = 0 ; i < ui->channelListWidget->count() ; i++) {
-            QListWidgetItem *chanItem = ui->channelListWidget->item(i);
-            if (chanItem->data(Qt::UserRole + 42).toString() == channel) {
-                chanItem->setTextColor(QColor(255, 0, 0));
-                //tray->showMessage("New message", QString("Received a new message in %1").arg(chanItem->text()));
-            }
-        }
+        // TODO : some focus jumble mumble : if window is not focused, don't mark read, wait until it is really seen/acted upon
+        currentChannel->markRead(message);
     }
 }
 
@@ -247,4 +261,20 @@ void MainWindow::on_actionLogin_triggered()
 void MainWindow::on_historyView_anchorClicked(const QUrl &url)
 {
     QDesktopServices::openUrl(url);
+}
+
+void MainWindow::on_splitter_splitterMoved(int, int)
+{
+    QSettings settings;
+    settings.beginGroup("layout");
+    if (!settings.contains("splitter") || settings.value("splitter").toByteArray() != ui->splitter->saveState()) {
+        settings.setValue("splitter", ui->splitter->saveState());
+        // That's ugly
+        settings.sync();
+    }
+}
+
+void MainWindow::on_historyView_highlighted(const QString &arg1)
+{
+    ui->statusBar->showMessage(arg1, 1000);
 }

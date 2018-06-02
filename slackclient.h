@@ -10,10 +10,13 @@
 class QWebSocket;
 
 class SlackClient;
+class SlackChannel;
+class SlackUser;
+class SlackMessage;
 
-class SlackChannel
+class SlackChannel : public QObject
 {
-    Q_GADGET
+    Q_OBJECT
 public:
     SlackChannel(SlackClient *client, const QJsonValueRef &source);
 
@@ -21,6 +24,7 @@ public:
     QString id;
     QString name;
     QString topic;
+    int unreadCount;
     bool is_group;
     bool is_im;
     bool is_channel;
@@ -28,6 +32,13 @@ public:
     bool is_general;
     bool is_archived;
     bool is_member;
+
+public slots:
+    void setUnreadCount(int unread);
+    void markRead(const SlackMessage &lastMessage);
+signals:
+    void unreadChanged();
+
 };
 
 class SlackUser
@@ -74,9 +85,9 @@ class SlackClient : public QObject
     Q_OBJECT
 public:
     explicit SlackClient(QObject *parent = nullptr);
-    void fire();
+    void start();
 
-    const std::map<QString, SlackChannel> &channels() const;
+    const std::map<QString, SlackChannel*> &channels() const;
     const std::map<QString, SlackUser> &users() const;
 
     const SlackUser &user(const QString &id) const;
@@ -87,9 +98,12 @@ public:
     void sendMessage(const QString &channel, const QString &msg);
 
     QString currentToken() const;
+
+    // Todo : channelType as enum.
+    void markChannelRead(const QString &channelType, const QString &channel, const QDateTime &lastTimestamp);
 signals:
     void authenticated();
-    void channelAdded(const SlackChannel &channel);
+    void channelAdded(SlackChannel *channel);
     void userAdded(const SlackUser &user);
 
     void channelHistory(const QList<SlackMessage> &history);
@@ -101,11 +115,13 @@ public slots:
     void login(const QString &existingToken);
 
 private:
+    void fetchCounts();
+
     QString selfId;
     QWebSocket *chaussette;
     int socketMessageId;
     QOAuth2AuthorizationCodeFlow oauth2;
-    std::map<QString, SlackChannel> m_channels;
+    std::map<QString, SlackChannel*> m_channels;
     std::map<QString, SlackUser> m_users;
 };
 

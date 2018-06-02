@@ -73,19 +73,38 @@ QString SlackClient::currentToken() const {
     return oauth2.token();
 }
 
-void SlackClient::fire() {
-    auto testCount = oauth2.get(QUrl("https://slack.com/api/users.counts"));
-    connect(testCount, &QNetworkReply::finished, [testCount]() {
-        auto doc = QJsonDocument::fromJson(testCount->readAll());
-        QFile f("/tmp/slack.sucks.json");
-        f.open(QIODevice::WriteOnly);
-        f.write(doc.toJson(QJsonDocument::Indented));
+void SlackClient::fetchCounts() {
+    auto replyCount = oauth2.get(QUrl("https://slack.com/api/users.counts"));
+    connect(replyCount, &QNetworkReply::finished, [this, replyCount]() {
+        auto doc = QJsonDocument::fromJson(replyCount->readAll());
+
+        for (const QJsonValueRef &channel: doc["channels"].toArray()) {
+            auto &&channelObj = channel.toObject();
+            auto it = m_channels.find(channelObj["id"].toString());
+            if (it != m_channels.end()) {
+                it->second->setUnreadCount(channelObj["unread_count_display"].toInt());
+            }
+        }
+        /*
+        for (const QJsonValueRef &channel: doc["groups"].toArray()) {
+            emit channelAdded(
+                m_channels.emplace(channel.toObject()["id"].toString(), SlackChannel(this, channel)).first->second
+            );
+        }
+        for (const QJsonValueRef &channel: doc["ims"].toArray()) {
+            emit channelAdded(
+                m_channels.emplace(channel.toObject()["id"].toString(), SlackChannel(this, channel)).first->second
+            );
+        }*/
     });
+}
+
+void SlackClient::start() {
     auto reply = oauth2.get(QUrl("https://slack.com/api/rtm.start"));
     connect(reply, &QNetworkReply::finished, [this, reply]() {
-        qDebug() << "Reply finished !";
-        qDebug() << reply->errorString();
-        qDebug() << oauth2.state();
+        qDebug() << "Reply finished ! " << reply->errorString();
+
+        this->fetchCounts();
 
         auto doc = QJsonDocument::fromJson(reply->readAll());
 
@@ -98,17 +117,17 @@ void SlackClient::fire() {
         }
         for (const QJsonValueRef &channel: doc["channels"].toArray()) {
             emit channelAdded(
-                m_channels.emplace(channel.toObject()["id"].toString(), SlackChannel(this, channel)).first->second
+                m_channels.emplace(channel.toObject()["id"].toString(), new SlackChannel(this, channel)).first->second
             );
         }
         for (const QJsonValueRef &channel: doc["groups"].toArray()) {
             emit channelAdded(
-                m_channels.emplace(channel.toObject()["id"].toString(), SlackChannel(this, channel)).first->second
+                m_channels.emplace(channel.toObject()["id"].toString(), new SlackChannel(this, channel)).first->second
             );
         }
         for (const QJsonValueRef &channel: doc["ims"].toArray()) {
             emit channelAdded(
-                m_channels.emplace(channel.toObject()["id"].toString(), SlackChannel(this, channel)).first->second
+                m_channels.emplace(channel.toObject()["id"].toString(), new SlackChannel(this, channel)).first->second
             );
         }
 
@@ -130,6 +149,12 @@ void SlackClient::fire() {
             qDebug() << " ==> " << doc["type"];
             if (doc["type"] == "message") {
                 qDebug() << "Emitting a message";
+                // Mark the channel as having some unread things
+                auto chanIt = m_channels.find(doc["channel"].toString());
+                if (chanIt != m_channels.end()) {
+                    chanIt->second->setUnreadCount(chanIt->second->unreadCount + 1);
+                }
+                // And send to everybody the information
                 emit(newMessage(doc["channel"].toString(), SlackMessage(doc.object())));
             } else if (doc["type"] == "desktop_notification") {
                 emit(desktopNotification(doc["title"].toString(), doc["subtitle"].toString(), doc["content"].toString()));
@@ -158,7 +183,7 @@ QString SlackClient::userId(const QString &nick) const
     return QString();
 }
 
-const std::map<QString, SlackChannel> &SlackClient::channels() const
+const std::map<QString, SlackChannel*> &SlackClient::channels() const
 {
     return m_channels;
 }
@@ -196,36 +221,89 @@ void SlackClient::sendMessage(const QString &channel, const QString &msgText)
     emit newMessage(channel, SlackMessage(selfId, msgText));
 }
 
-/// gadgets
+void SlackClient::markChannelRead(const QString &channelType, const QString &channel, const QDateTime &lastTimestamp) {
+    QVariantMap query;
+    query.insert("channel", channel);
+    query.insert("ts", lastTimestamp.toMSecsSinceEpoch() / 1000. + 1000);   // The +1000 is working around lack of 'precision' when using QDateTime
+                                                                            // When writing an IM program, ALWAYS use microseconds precision, everybody knows that, right ?
+    QUrl url("https://slack.com/api/channels.mark");
+    if (channelType == "im")
+        url = QUrl("https://slack.com/api/im.mark");
+    else if (channelType == "group")
+        url = QUrl("https://slack.com/api/groups.mark");
+    else if (channelType == "mpim")
+        url = QUrl("https://slack.com/api/mpim.mark");
+    qDebug() << url << query;
+    auto reply = oauth2.post(url, query);
+    connect(reply, &QNetworkReply::finished, [this, reply]() {
+        qDebug() << "Mark channel reply finished !";
+        qDebug() << reply->errorString();
+        QString whole_doc = reply->readAll();
+        qDebug() << whole_doc;
+    });
+}
 
 SlackChannel::SlackChannel(SlackClient *client, const QJsonValueRef &sourceRef)
+    : QObject(client)
 {
     QJsonObject &&source = sourceRef.toObject();
     created     = QDateTime::fromTime_t(source["created"].toInt());
     id          = source["id"].toString();
     if (source.contains("is_im") && source["is_im"].toBool()) {
+        // Type identification
         is_im = true;
-        is_member = source["is_open"].toBool();;
         is_channel = false;
         is_group = false;
+
+        is_member = source["is_open"].toBool();;
         name = client->user(source["user"].toString()).name;
     } else {
-        name        = source["name"].toString();
+        // Type identification
+        is_im       = false;
         is_channel  = source["is_channel"].toBool();
-        is_group    = source["is_group"].toBool();
         is_mpim     = source["is_mpim"].toBool();
+
+        name        = source["name"].toString();
+        is_group    = source["is_group"].toBool();
         is_general  = source["is_general"].toBool();
         is_archived = source["is_archived"].toBool();
-        is_member   = source["is_member"].toBool();
         if (is_group)
             is_member = source["is_open"].toBool();
+        else
+            is_member   = source["is_member"].toBool();
     }
 
     if (source.contains("topic")) {
         auto topicObject = source["topic"].toObject();
         topic = topicObject["value"].toString();
     }
+
+    unreadCount = 0;
 }
+
+void SlackChannel::setUnreadCount(int unread) {
+    if (unread != unreadCount) {
+        unreadCount = unread;
+        emit unreadChanged();
+    }
+}
+
+void SlackChannel::markRead(const SlackMessage &message) {
+    // Todo : call API in client....
+    SlackClient* client = static_cast<SlackClient*>(parent());
+    if (is_channel)
+        client->markChannelRead("channel", id, message.when);
+    else if (is_group)
+        client->markChannelRead("group", id, message.when);
+    else if (is_im)
+        client->markChannelRead("im", id, message.when);
+    else if (is_mpim)
+        client->markChannelRead("mpim", id, message.when);
+
+    setUnreadCount(0);
+}
+
+/// gadgets
 
 SlackUser::SlackUser(const QJsonValueRef &sourceRef)
 {
