@@ -102,12 +102,17 @@ void MainWindow::renderText(QTextCursor &cursor, const QString &text)
 
         if (capturedPart.startsWith('@')) {
             QString userId = capturedPart.mid(1).toString();
-            auto charFormat = cursor.charFormat();
-            charFormat.setFontWeight(QFont::Bold);
-            cursor.setCharFormat(charFormat);
-            auto &user = client->user(userId);
-            cursor.insertText("@");
-            cursor.insertText(user.name);
+            if (client->hasUser(userId)) {
+                auto charFormat = cursor.charFormat();
+                charFormat.setFontWeight(QFont::Bold);
+                cursor.setCharFormat(charFormat);
+                auto &user = client->user(userId);
+                cursor.insertText("@");
+                cursor.insertText(user.name);
+            } else {
+                cursor.insertText("@");
+                cursor.insertText(userId);
+            }
         } else if (capturedPart.startsWith("http")) {
             // This is a link !
             auto charFormat = cursor.charFormat();

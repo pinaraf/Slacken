@@ -149,6 +149,11 @@ void SlackClient::start() {
     });
 }
 
+bool SlackClient::hasUser(const QString &id) const
+{
+    return (m_users.find(id) != m_users.end());
+}
+
 const SlackUser & SlackClient::user(const QString &id) const
 {
     return m_users.find(id)->second;

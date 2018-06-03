@@ -92,6 +92,7 @@ public:
     const std::map<QString, SlackChannel*> &channels() const;
     const std::map<QString, SlackUser> &users() const;
 
+    bool hasUser(const QString &id) const;
     const SlackUser &user(const QString &id) const;
     QString userId(const QString &userName) const;
 
