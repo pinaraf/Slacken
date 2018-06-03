@@ -77,6 +77,7 @@ public:
     QString username;   // Seriously slack ?
     QString text;
     QDateTime when;
+    QString ts;
 
     std::vector<SlackMessageAttachment> attachments;
 };
@@ -101,7 +102,7 @@ public:
     QString currentToken() const;
 
     // Todo : channelType as enum.
-    void markChannelRead(const QString &channelType, const QString &channel, const QDateTime &lastTimestamp);
+    void markChannelRead(const QString &channelType, const QString &channel, const QString &lastTimestamp);
 signals:
     void authenticated();
     void channelAdded(SlackChannel *channel);

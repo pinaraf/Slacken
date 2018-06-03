@@ -185,14 +185,19 @@ void MainWindow::channelHistoryAvailable(const QList<SlackMessage> &messages)
         return msgA.when < msgB.when;
     });
     bool crossedMark = !currentChannel->last_read.isValid();
+    QTextBlockFormat baseFmt;
     for (const SlackMessage &message: sorted_messages) {
         if (!crossedMark && (message.when > currentChannel->last_read)) {
             qDebug() << "INSERTING HTML " << crossedMark << message.when << currentChannel->last_read;
+            baseFmt = cursor.blockFormat();
             cursor.insertHtml("<hr></hr>");
-            crossedMark = true;
         }
         renderMessage(cursor, message);
         cursor.movePosition(QTextCursor::NextBlock);
+        if (!crossedMark && (message.when > currentChannel->last_read)) {
+            crossedMark = true;
+            cursor.setBlockFormat(baseFmt);
+        }
     }
 
     currentChannel->markRead(sorted_messages.last());

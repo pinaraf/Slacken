@@ -196,11 +196,10 @@ void SlackClient::sendMessage(const QString &channel, const QString &msgText)
     emit newMessage(channel, SlackMessage(selfId, msgText));
 }
 
-void SlackClient::markChannelRead(const QString &channelType, const QString &channel, const QDateTime &lastTimestamp) {
+void SlackClient::markChannelRead(const QString &channelType, const QString &channel, const QString &lastTimestamp) {
     QVariantMap query;
     query.insert("channel", channel);
-    query.insert("ts", lastTimestamp.toMSecsSinceEpoch() / 1000. + 0.1);   // The +0.1 is working around lack of 'precision' when using QDateTime
-                                                                            // When writing an IM program, ALWAYS use microseconds precision, everybody knows that, right ?
+    query.insert("ts", lastTimestamp);
     QUrl url("https://slack.com/api/channels.mark");
     if (channelType == "im")
         url = QUrl("https://slack.com/api/im.mark");
@@ -271,16 +270,16 @@ void SlackChannel::setUnreadCount(int unread) {
 
 void SlackChannel::markRead(const SlackMessage &message) {
     // Todo : call API in client....
-    qDebug() << "Mark read after " << message.when.toMSecsSinceEpoch() / 1000.;
+    qDebug() << "Mark read after " << message.ts;
     SlackClient* client = static_cast<SlackClient*>(parent());
     if (is_channel)
-        client->markChannelRead("channel", id, message.when);
+        client->markChannelRead("channel", id, message.ts);
     else if (is_group)
-        client->markChannelRead("group", id, message.when);
+        client->markChannelRead("group", id, message.ts);
     else if (is_im)
-        client->markChannelRead("im", id, message.when);
+        client->markChannelRead("im", id, message.ts);
     else if (is_mpim)
-        client->markChannelRead("mpim", id, message.when);
+        client->markChannelRead("mpim", id, message.ts);
 
     last_read = message.when;
     setUnreadCount(0);
@@ -310,7 +309,7 @@ SlackMessage::SlackMessage(const QJsonObject &source)
     type = source["type"].toString();
     user = source["user"].toString();
     text = source["text"].toString();
-    QString ts = source["ts"].toString();
+    ts   = source["ts"].toString();
     double timespec = ts.toDouble();
     when = QDateTime::fromMSecsSinceEpoch(1000 * timespec);
     username = source["username"].toString();
