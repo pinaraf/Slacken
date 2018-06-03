@@ -54,16 +54,21 @@ QString SlackClient::currentToken() const {
 }
 
 void SlackClient::fetchCounts() {
-    auto replyCount = oauth2.get(QUrl("https://slack.com/api/users.counts"));
+    QVariantMap query;
+    query.insert("simple_unreads", true);
+    auto replyCount = oauth2.post(QUrl("https://slack.com/api/users.counts"), query);
     connect(replyCount, &QNetworkReply::finished, [this, replyCount]() {
         auto doc = QJsonDocument::fromJson(replyCount->readAll());
+        QFile f("/tmp/users.counts.json");
+        f.open(QIODevice::WriteOnly);
+        f.write(doc.toJson(QJsonDocument::Indented));
 
         auto setUnreads = [&] (const QString &listPath) {
             for (const QJsonValueRef &channel: doc[listPath].toArray()) {
                 auto &&channelObj = channel.toObject();
                 auto it = m_channels.find(channelObj["id"].toString());
                 if (it != m_channels.end()) {
-                    it->second->setUnreadCount(channelObj["unread_count_display"].toInt());
+                    it->second->setHasUnread(channelObj["has_unreads"].toBool());
                 }
             }
         };
@@ -107,9 +112,9 @@ void SlackClient::start() {
         }
 
         //qDebug() << doc.toJson(QJsonDocument::Indented);
-/*        QFile f("/tmp/rtm.start.json");
+        QFile f("/tmp/rtm.start.json");
         f.open(QIODevice::WriteOnly);
-        f.write(doc.toJson(QJsonDocument::Indented));*/
+        f.write(doc.toJson(QJsonDocument::Indented));
 
         chaussette = new QWebSocket("", QWebSocketProtocol::VersionLatest, this);
         connect(chaussette, &QWebSocket::connected, [this]() {
@@ -127,7 +132,7 @@ void SlackClient::start() {
                 // Mark the channel as having some unread things
                 auto chanIt = m_channels.find(doc["channel"].toString());
                 if (chanIt != m_channels.end()) {
-                    chanIt->second->setUnreadCount(chanIt->second->unreadCount + 1);
+                    chanIt->second->setHasUnread(true);
                 }
                 // And send to everybody the information
                 emit(newMessage(doc["channel"].toString(), SlackMessage(doc.object())));
@@ -258,12 +263,12 @@ SlackChannel::SlackChannel(SlackClient *client, const QJsonValueRef &sourceRef)
         last_read = QDateTime();
     }
 
-    unreadCount = 0;
+    has_unread = false;
 }
 
-void SlackChannel::setUnreadCount(int unread) {
-    if (unread != unreadCount) {
-        unreadCount = unread;
+void SlackChannel::setHasUnread(bool unread) {
+    if (unread != has_unread) {
+        has_unread = unread;
         emit unreadChanged();
     }
 }
@@ -282,7 +287,7 @@ void SlackChannel::markRead(const SlackMessage &message) {
         client->markChannelRead("mpim", id, message.ts);
 
     last_read = message.when;
-    setUnreadCount(0);
+    setHasUnread(false);
 }
 
 /// gadgets

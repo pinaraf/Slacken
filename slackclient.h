@@ -25,7 +25,7 @@ public:
     QString id;
     QString name;
     QString topic;
-    int unreadCount;
+    bool has_unread;
     bool is_group;
     bool is_im;
     bool is_channel;
@@ -35,7 +35,7 @@ public:
     bool is_member;
 
 public slots:
-    void setUnreadCount(int unread);
+    void setHasUnread(bool unread);
     void markRead(const SlackMessage &lastMessage);
 signals:
     void unreadChanged();

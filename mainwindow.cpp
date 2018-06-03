@@ -41,13 +41,13 @@ MainWindow::MainWindow(QWidget *parent) :
             //qDebug() << display << chan.is_im << chan.is_channel << chan.is_group;
             auto item = new QListWidgetItem(display, ui->channelListWidget);
             item->setData(Qt::UserRole + 42, QVariant::fromValue(chan));
-            if (chan->unreadCount) {
+            if (chan->has_unread) {
                 auto font = item->font();
                 font.setWeight(QFont::Bold);
                 item->setFont(font);
             }
             connect(chan, &SlackChannel::unreadChanged, [item, chan]() {
-                if (chan->unreadCount) {
+                if (chan->has_unread) {
                     auto font = item->font();
                     font.setWeight(QFont::Bold);
                     item->setFont(font);
