@@ -113,7 +113,6 @@ void MainWindow::renderText(QTextCursor &cursor, const QString &text)
     while ((pos = output.indexOf(formatDelimiter, currentIdx, &match)) != -1) {
         pos = match.capturedStart(1);
         cursor.insertText(text.mid(currentIdx, pos - currentIdx));
-        auto backupCharFormat = cursor.charFormat();
 
         QStringRef capturedPart = match.capturedRef(2);
 
@@ -126,6 +125,7 @@ void MainWindow::renderText(QTextCursor &cursor, const QString &text)
                 auto &user = client->user(userId);
                 cursor.insertText("@");
                 cursor.insertText(user.name);
+                cursor.setCharFormat(QTextCharFormat());
             } else {
                 cursor.insertText("@");
                 cursor.insertText(userId);
@@ -142,34 +142,42 @@ void MainWindow::renderText(QTextCursor &cursor, const QString &text)
             } else {
                 cursor.insertText(capturedPart.toString());
             }
+            cursor.setCharFormat(QTextCharFormat());
         } else {
             // We don't know
             cursor.insertText(capturedPart.toString());
         }
-
-        cursor.setCharFormat(backupCharFormat);
-
         currentIdx = pos + 1 + match.capturedLength(1) - 1;
     }
     cursor.insertText(text.mid(currentIdx));
+    cursor.setCharFormat(QTextCharFormat());
 }
 
 void MainWindow::renderMessage(QTextCursor &cursor, const SlackMessage &message)
 {
+    // Display time
+    cursor.insertText(message.when.time().toString());
+
+    // Display user
     QString userDisplay = "\t<%1>\t";
     if (!message.user.isEmpty()) {
         if (client->hasUser(message.user)) {
             auto user = client->user(message.user);
             userDisplay = userDisplay.arg(user.name);
+            QTextCharFormat fmt;
+            fmt.setAnchorHref(QString("slack://im/%1").arg(message.user));
+            cursor.mergeCharFormat(fmt);
         }
     } else if (!message.username.isEmpty()) {
         userDisplay = userDisplay.arg(message.username);
     }
-    cursor.insertText(message.when.toLocalTime().toString());
     cursor.insertText(userDisplay);
+    cursor.setCharFormat(QTextCharFormat());
+
+    // Display text itself
     renderText(cursor, message.text);
-    //cursor.insertText(message.text);
     for (auto &attachment: message.attachments) {
+        cursor.insertBlock();
         QTextCharFormat fmt = cursor.charFormat();
         QBrush foreground = fmt.foreground();
         if (attachment.color.isValid()) {
@@ -190,7 +198,6 @@ void MainWindow::renderMessage(QTextCursor &cursor, const SlackMessage &message)
             cursor.setCharFormat(fmt);
         }
     }
-    cursor.insertBlock();
 }
 
 void MainWindow::channelHistoryAvailable(const QList<SlackMessage> &messages)
@@ -212,10 +219,14 @@ void MainWindow::channelHistoryAvailable(const QList<SlackMessage> &messages)
     QTextBlockFormat baseFmt;
     QString lastReadMarker("last-read-marker");
     QTextCursor lastReadPosition;
+
+    QDate currentDate;
+    QTextCursor previousCursor = cursor;
     for (const SlackMessage &message: sorted_messages) {
+
         if (!crossedMark && (message.when > currentChannel->last_read)) {
             qDebug() << "INSERTING HTML " << crossedMark << message.when << currentChannel->last_read;
-            baseFmt = cursor.blockFormat();
+            //baseFmt = cursor.blockFormat();
 
             cursor.movePosition(QTextCursor::PreviousBlock);
             QTextBlockFormat newFmt;
@@ -229,14 +240,21 @@ void MainWindow::channelHistoryAvailable(const QList<SlackMessage> &messages)
             cursor.mergeCharFormat(newCharFmt);
             lastReadPosition = cursor;
             cursor.movePosition(QTextCursor::NextBlock);
-            cursor.setBlockFormat(baseFmt);
-        }
-        renderMessage(cursor, message);
-        cursor.movePosition(QTextCursor::NextBlock);
-        if (!crossedMark && (message.when > currentChannel->last_read)) {
-            crossedMark = true;
             //cursor.setBlockFormat(baseFmt);
+            crossedMark = true;
         }
+
+        if (message.when.date() != currentDate) {
+            currentDate = message.when.date();
+            cursor.insertText("It's a brand new date - ");
+            cursor.insertText(currentDate.toString());
+        }
+        cursor.insertBlock();
+        cursor.movePosition(QTextCursor::NextBlock);
+
+        renderMessage(cursor, message);
+
+
     }
 
     if (!crossedMark) {
@@ -297,6 +315,7 @@ void MainWindow::newMessageArrived(const QString &channel, const SlackMessage &m
     if (channel == currentChannel->id) {
         auto cursor = ui->historyView->textCursor();
         cursor.movePosition(QTextCursor::End);
+        cursor.insertBlock();
         renderMessage(cursor, message);
         cursor.movePosition(QTextCursor::NextBlock);
         ui->historyView->setTextCursor(cursor);
@@ -325,7 +344,15 @@ void MainWindow::on_actionLogin_triggered()
 
 void MainWindow::on_historyView_anchorClicked(const QUrl &url)
 {
-    QDesktopServices::openUrl(url);
+    if (url.scheme() == "slack") {
+        if (url.host() == "im") {
+            qDebug() << "Open IM with " << url.path().mid(1);
+        } else {
+            qDebug() << "Unknown slack action " << url.host();
+        }
+    } else {
+        QDesktopServices::openUrl(url);
+    }
 }
 
 void MainWindow::on_splitter_splitterMoved(int, int)
