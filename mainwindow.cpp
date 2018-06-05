@@ -7,6 +7,7 @@
 #include <QRegularExpression>
 #include <QMessageBox>
 #include <QDesktopServices>
+#include <QTreeWidgetItem>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -24,6 +25,10 @@ MainWindow::MainWindow(QWidget *parent) :
         this->show();
     });
     client = new SlackClient(this);
+
+    clients.append(new QTreeWidgetItem(ui->channelTreeWidget));
+    clients[0]->setText(0, "Slack");
+
     connect(client, &SlackClient::authenticated, [this]() {
         QSettings settings;
         settings.beginGroup("auth");
@@ -33,33 +38,11 @@ MainWindow::MainWindow(QWidget *parent) :
     });
     connect(client, &SlackClient::channelAdded, [this](SlackChannel *chan) {
         if (chan->is_member) {
-            QString display = chan->name;
-            if (chan->is_channel)
-                display = QString("#%1").arg(chan->name);
-            else if (chan->is_group)
-                display = QString("&%1").arg(chan->name);
-            //qDebug() << display << chan.is_im << chan.is_channel << chan.is_group;
-            auto item = new QListWidgetItem(display, ui->channelListWidget);
-            item->setData(Qt::UserRole + 42, QVariant::fromValue(chan));
-            if (chan->has_unread) {
-                auto font = item->font();
-                font.setWeight(QFont::Bold);
-                item->setFont(font);
-            }
-            connect(chan, &SlackChannel::unreadChanged, [item, chan]() {
-                if (chan->has_unread) {
-                    auto font = item->font();
-                    font.setWeight(QFont::Bold);
-                    item->setFont(font);
-                } else {
-                    auto font = item->font();
-                    font.setWeight(QFont::Normal);
-                    item->setFont(font);
-                }
-            });
-            ui->channelListWidget->addItem(item);
-            ui->channelListWidget->sortItems();
+            this->showChannelInTree(chan);
         }
+    });
+    connect(client, &SlackClient::channelJoined, [this](SlackChannel *chan) {
+        this->showChannelInTree(chan);
     });
     connect(client, &SlackClient::channelHistory, this, &MainWindow::channelHistoryAvailable);
     connect(client, &SlackClient::newMessage, this, &MainWindow::newMessageArrived);
@@ -71,12 +54,43 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::on_channelListWidget_itemClicked(QListWidgetItem *item)
+void MainWindow::showChannelInTree(SlackChannel *chan)
 {
-    currentChannel = item->data(Qt::UserRole + 42).value<SlackChannel*>();
+    QString display = chan->name;
+    if (chan->is_channel)
+        display = QString("#%1").arg(chan->name);
+    else if (chan->is_group)
+        display = QString("&%1").arg(chan->name);
+
+    auto item = new QTreeWidgetItem(clients[0]);
+    item->setText(0, display);
+    item->setData(0, Qt::UserRole + 42, QVariant::fromValue(chan));
+    if (chan->has_unread) {
+        auto font = item->font(0);
+        font.setWeight(QFont::Bold);
+        item->setFont(0, font);
+    }
+    connect(chan, &SlackChannel::unreadChanged, [item, chan]() {
+        if (chan->has_unread) {
+            auto font = item->font(0);
+            font.setWeight(QFont::Bold);
+            item->setFont(0, font);
+        } else {
+            auto font = item->font(0);
+            font.setWeight(QFont::Normal);
+            item->setFont(0, font);
+        }
+    });
+    clients[0]->addChild(item);
+    clients[0]->sortChildren(0, Qt::AscendingOrder);
+}
+
+void MainWindow::on_channelTreeWidget_itemClicked(QTreeWidgetItem *item)
+{
+    currentChannel = item->data(0, Qt::UserRole + 42).value<SlackChannel*>();
     qDebug() << "Switching to " << currentChannel->id;
     client->requestHistory(currentChannel->id);
-    item->setTextColor(QPalette().windowText().color());
+    item->setTextColor(0, QPalette().windowText().color());
     ui->topicViewer->clear();
 
     auto cursor = ui->topicViewer->textCursor();
@@ -141,8 +155,10 @@ void MainWindow::renderMessage(QTextCursor &cursor, const SlackMessage &message)
 {
     QString userDisplay = "\t<%1>\t";
     if (!message.user.isEmpty()) {
-        auto user = client->user(message.user);
-        userDisplay = userDisplay.arg(user.name);
+        if (client->hasUser(message.user)) {
+            auto user = client->user(message.user);
+            userDisplay = userDisplay.arg(user.name);
+        }
     } else if (!message.username.isEmpty()) {
         userDisplay = userDisplay.arg(message.username);
     }
@@ -191,23 +207,53 @@ void MainWindow::channelHistoryAvailable(const QList<SlackMessage> &messages)
     });
     bool crossedMark = !currentChannel->last_read.isValid();
     QTextBlockFormat baseFmt;
+    QString lastReadMarker("last-read-marker");
+    QTextCursor lastReadPosition;
     for (const SlackMessage &message: sorted_messages) {
         if (!crossedMark && (message.when > currentChannel->last_read)) {
             qDebug() << "INSERTING HTML " << crossedMark << message.when << currentChannel->last_read;
             baseFmt = cursor.blockFormat();
-            cursor.insertHtml("<hr></hr>");
+
+            cursor.movePosition(QTextCursor::PreviousBlock);
+            QTextBlockFormat newFmt;
+            newFmt.setBottomMargin(1);
+            //newFmt.setTopMargin(1);
+            newFmt.setProperty(QTextFormat::BlockTrailingHorizontalRulerWidth, QTextLength(QTextLength::PercentageLength, 100));
+            cursor.mergeBlockFormat(newFmt);
+            QTextCharFormat newCharFmt;
+            newCharFmt.setProperty(QTextFormat::AnchorName, lastReadMarker);
+            newCharFmt.setProperty(QTextFormat::IsAnchor, true);
+            cursor.mergeCharFormat(newCharFmt);
+            lastReadPosition = cursor;
+            cursor.movePosition(QTextCursor::NextBlock);
+            cursor.setBlockFormat(baseFmt);
         }
         renderMessage(cursor, message);
         cursor.movePosition(QTextCursor::NextBlock);
         if (!crossedMark && (message.when > currentChannel->last_read)) {
             crossedMark = true;
-            cursor.setBlockFormat(baseFmt);
+            //cursor.setBlockFormat(baseFmt);
         }
+    }
+
+    if (!crossedMark) {
+        // Always set the last-read-marker.
+        QTextCharFormat newFmt;
+        newFmt.setProperty(QTextFormat::AnchorName, lastReadMarker);
+        newFmt.setProperty(QTextFormat::IsAnchor, true);
+        lastReadPosition = cursor;
+        cursor.mergeCharFormat(newFmt);
     }
 
     currentChannel->markRead(sorted_messages.last());
 
-    ui->historyView->setTextCursor(cursor);
+    //ui->historyView->setTextCursor(cursor);
+    /*QTimer::singleShot(100, [this]() {
+        ui->historyView->scrollToAnchor("last-read-marker");
+    });
+    ui->historyView->scrollToAnchor(lastReadMarker);*/
+    ui->historyView->setTextCursor(lastReadPosition);
+    ui->historyView->ensureCursorVisible();
 }
 
 void MainWindow::on_newMessage_returnPressed()

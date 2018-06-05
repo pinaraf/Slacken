@@ -18,7 +18,7 @@ class SlackChannel : public QObject
 {
     Q_OBJECT
 public:
-    SlackChannel(SlackClient *client, const QJsonValueRef &source);
+    SlackChannel(SlackClient *client, const QJsonValue &source);
 
     QDateTime created;
     QDateTime last_read;
@@ -104,6 +104,7 @@ public:
 
     // Todo : channelType as enum.
     void markChannelRead(const QString &channelType, const QString &channel, const QString &lastTimestamp);
+
 signals:
     void authenticated();
     void channelAdded(SlackChannel *channel);
@@ -114,6 +115,10 @@ signals:
     void newMessage(const QString &channel, const SlackMessage &msg);
 
     void desktopNotification(const QString &title, const QString &subtitle, const QString &message);
+
+    void channelJoined(SlackChannel *channel);
+    void channelLeft(SlackChannel *channel);
+
 public slots:
     void login(const QString &existingToken);
 

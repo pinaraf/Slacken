@@ -90,31 +90,31 @@ void SlackClient::start() {
 
         selfId = doc["self"].toObject()["id"].toString();
         // Instanciate each channel and user
-        for (const QJsonValueRef &user: doc["users"].toArray()) {
+        for (const QJsonValueRef user: doc["users"].toArray()) {
             emit userAdded(
                 m_users.emplace(user.toObject()["id"].toString(), SlackUser(user)).first->second
             );
         }
-        for (const QJsonValueRef &channel: doc["channels"].toArray()) {
+        for (const QJsonValueRef channel: doc["channels"].toArray()) {
             emit channelAdded(
                 m_channels.emplace(channel.toObject()["id"].toString(), new SlackChannel(this, channel)).first->second
             );
         }
-        for (const QJsonValueRef &channel: doc["groups"].toArray()) {
+        for (const QJsonValueRef channel: doc["groups"].toArray()) {
             emit channelAdded(
                 m_channels.emplace(channel.toObject()["id"].toString(), new SlackChannel(this, channel)).first->second
             );
         }
-        for (const QJsonValueRef &channel: doc["ims"].toArray()) {
+        for (const QJsonValueRef channel: doc["ims"].toArray()) {
             emit channelAdded(
                 m_channels.emplace(channel.toObject()["id"].toString(), new SlackChannel(this, channel)).first->second
             );
         }
 
         //qDebug() << doc.toJson(QJsonDocument::Indented);
-        QFile f("/tmp/rtm.start.json");
+        /*QFile f("/tmp/rtm.start.json");
         f.open(QIODevice::WriteOnly);
-        f.write(doc.toJson(QJsonDocument::Indented));
+        f.write(doc.toJson(QJsonDocument::Indented));*/
 
         chaussette = new QWebSocket("", QWebSocketProtocol::VersionLatest, this);
         connect(chaussette, &QWebSocket::connected, [this]() {
@@ -126,9 +126,8 @@ void SlackClient::start() {
         connect(chaussette, &QWebSocket::textMessageReceived, [this](const QString &msg) {
             qDebug() << "Chaussette in : " << msg;
             auto doc = QJsonDocument::fromJson(msg.toUtf8());
-            qDebug() << " ==> " << doc["type"];
-            if (doc["type"] == "message") {
-                qDebug() << "Emitting a message";
+            QString type = doc["type"].toString();
+            if (type == "message") {
                 // Mark the channel as having some unread things
                 auto chanIt = m_channels.find(doc["channel"].toString());
                 if (chanIt != m_channels.end()) {
@@ -136,8 +135,22 @@ void SlackClient::start() {
                 }
                 // And send to everybody the information
                 emit(newMessage(doc["channel"].toString(), SlackMessage(doc.object())));
-            } else if (doc["type"] == "desktop_notification") {
+            } else if (type == "desktop_notification") {
                 emit(desktopNotification(doc["title"].toString(), doc["subtitle"].toString(), doc["content"].toString()));
+            } else if (type == "im_open" || type == "channel_joined" || type == "group_joined") {
+                auto chanIt = m_channels.find(doc["channel"].toString());
+                if (chanIt != m_channels.end()) {
+                    emit(channelJoined(chanIt->second));
+                }
+            } else if (type == "im_close" || type == "channel_left" || type == "group_left") {
+                auto chanIt = m_channels.find(doc["channel"].toString());
+                if (chanIt != m_channels.end()) {
+                    emit(channelLeft(chanIt->second));
+                }
+            } else if (type == "channel_created") {
+                emit channelAdded(
+                    m_channels.emplace(doc["id"].toString(), new SlackChannel(this, doc.object())).first->second
+                );
             }
             /*if (doc["type"] == "hello")
                 chaussette->sendTextMessage("{\"id\": 1, \"type\": \"message\", \"channel\": \"D4EPF2N22\", \"text\": \"LA CHAUSSETTE PARLE !\"}");*/
@@ -227,7 +240,7 @@ void SlackClient::markChannelRead(const QString &channelType, const QString &cha
     });
 }
 
-SlackChannel::SlackChannel(SlackClient *client, const QJsonValueRef &sourceRef)
+SlackChannel::SlackChannel(SlackClient *client, const QJsonValue &sourceRef)
     : QObject(client)
 {
     QJsonObject &&source = sourceRef.toObject();
@@ -279,7 +292,6 @@ void SlackChannel::setHasUnread(bool unread) {
 }
 
 void SlackChannel::markRead(const SlackMessage &message) {
-    // Todo : call API in client....
     qDebug() << "Mark read after " << message.ts;
     SlackClient* client = static_cast<SlackClient*>(parent());
     if (is_channel)
