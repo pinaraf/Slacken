@@ -27,8 +27,11 @@ MainWindow::MainWindow(QWidget *parent) :
     client = new SlackClient(this);
 
     clients.append(new QTreeWidgetItem(ui->channelTreeWidget));
-    clients[0]->setText(0, "Slack");
+    clients[0]->setText(0, "Pending...");
 
+    connect(client, &SlackClient::hasBasicData, [this]() {
+        clients[0]->setText(0, client->teamName());
+    });
     connect(client, &SlackClient::authenticated, [this]() {
         QSettings settings;
         settings.beginGroup("auth");

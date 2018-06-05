@@ -53,6 +53,10 @@ QString SlackClient::currentToken() const {
     return oauth2.token();
 }
 
+QString SlackClient::teamName() const {
+    return m_teamName;
+}
+
 void SlackClient::fetchCounts() {
     QVariantMap query;
     query.insert("simple_unreads", true);
@@ -64,7 +68,7 @@ void SlackClient::fetchCounts() {
         f.write(doc.toJson(QJsonDocument::Indented));
 
         auto setUnreads = [&] (const QString &listPath) {
-            for (const QJsonValueRef &channel: doc[listPath].toArray()) {
+            for (const QJsonValueRef channel: doc[listPath].toArray()) {
                 auto &&channelObj = channel.toObject();
                 auto it = m_channels.find(channelObj["id"].toString());
                 if (it != m_channels.end()) {
@@ -89,6 +93,9 @@ void SlackClient::start() {
         auto doc = QJsonDocument::fromJson(reply->readAll());
 
         selfId = doc["self"].toObject()["id"].toString();
+        m_teamName = doc["team"].toObject()["name"].toString();
+
+        emit(hasBasicData());
         // Instanciate each channel and user
         for (const QJsonValueRef user: doc["users"].toArray()) {
             emit userAdded(
@@ -117,7 +124,7 @@ void SlackClient::start() {
         f.write(doc.toJson(QJsonDocument::Indented));*/
 
         chaussette = new QWebSocket("", QWebSocketProtocol::VersionLatest, this);
-        connect(chaussette, &QWebSocket::connected, [this]() {
+        connect(chaussette, &QWebSocket::connected, []() {
             qDebug() << "Chaussette en ligne !";
         });
         connect(chaussette, &QWebSocket::disconnected, []() {
@@ -200,7 +207,7 @@ void SlackClient::requestHistory(const QString &id)
         auto doc = QJsonDocument::fromJson(whole_doc.toUtf8());
 
         QList<SlackMessage> messages;
-        for (const QJsonValueRef &msgJson: doc["messages"].toArray()) {
+        for (const QJsonValueRef msgJson: doc["messages"].toArray()) {
             messages << SlackMessage(msgJson.toObject());
         }
         qDebug() << "EMIT";
@@ -337,7 +344,7 @@ SlackMessage::SlackMessage(const QJsonObject &source)
     username = source["username"].toString();
 
     if (source.contains("attachments")) {
-        for (auto &&attachment: source["attachments"].toArray()) {
+        for (auto attachment: source["attachments"].toArray()) {
             attachments.emplace_back(SlackMessageAttachment(attachment.toObject()));
         }
     }

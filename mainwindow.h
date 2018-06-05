@@ -50,7 +50,7 @@ private:
 
     Ui::MainWindow *ui;
     SlackChannel *currentChannel;
-    SlackClient *client;
+    SlackClient *client; // Todo : drop this for multi-team...
     QSystemTrayIcon *tray;
     QList<QTreeWidgetItem*> clients;
 };

@@ -100,6 +100,7 @@ public:
 
     void sendMessage(const QString &channel, const QString &msg);
 
+    QString teamName() const;
     QString currentToken() const;
 
     // Todo : channelType as enum.
@@ -107,6 +108,7 @@ public:
 
 signals:
     void authenticated();
+    void hasBasicData();
     void channelAdded(SlackChannel *channel);
     void userAdded(const SlackUser &user);
 
@@ -125,6 +127,7 @@ public slots:
 private:
     void fetchCounts();
 
+    QString m_teamName;
     QString selfId;
     QWebSocket *chaussette;
     int socketMessageId;
