@@ -228,24 +228,25 @@ void MainWindow::channelHistoryAvailable(const QList<SlackMessage> &messages)
             qDebug() << "INSERTING HTML " << crossedMark << message.when << currentChannel->last_read;
             //baseFmt = cursor.blockFormat();
 
-            cursor.movePosition(QTextCursor::PreviousBlock);
+            QTextCursor previousBlock(cursor);
+            previousBlock.movePosition(QTextCursor::PreviousBlock);
             QTextBlockFormat newFmt;
             newFmt.setBottomMargin(1);
             //newFmt.setTopMargin(1);
             newFmt.setProperty(QTextFormat::BlockTrailingHorizontalRulerWidth, QTextLength(QTextLength::PercentageLength, 100));
-            cursor.mergeBlockFormat(newFmt);
+            previousBlock.mergeBlockFormat(newFmt);
             QTextCharFormat newCharFmt;
             newCharFmt.setProperty(QTextFormat::AnchorName, lastReadMarker);
             newCharFmt.setProperty(QTextFormat::IsAnchor, true);
-            cursor.mergeCharFormat(newCharFmt);
-            lastReadPosition = cursor;
-            cursor.movePosition(QTextCursor::NextBlock);
+            previousBlock.mergeCharFormat(newCharFmt);
+            lastReadPosition = previousBlock;
             //cursor.setBlockFormat(baseFmt);
             crossedMark = true;
         }
 
         if (message.when.date() != currentDate) {
             currentDate = message.when.date();
+            cursor.insertBlock();
             cursor.insertText("It's a brand new date - ");
             cursor.insertText(currentDate.toString());
         }
