@@ -168,6 +168,17 @@ void SlackClient::start() {
         webSocketUrl = QUrl(doc["url"].toString());
         qDebug() << "Chaussette vers ... " << webSocketUrl;
         chaussette->open(webSocketUrl);
+        QTimer *pingTimer = new QTimer(this);
+        pingTimer->setInterval(5000);
+        pingTimer->setSingleShot(false);
+        pingTimer->start();
+        connect(pingTimer, &QTimer::timeout, [this] () {
+            qDebug() << "Ping ws...";
+            chaussette->ping();
+        });
+        connect(chaussette, &QWebSocket::pong, [this] (quint64 elapsedTime, const QByteArray &) {
+            qDebug() << "Pong " << elapsedTime;
+        });
         socketMessageId = 0;
     });
 }

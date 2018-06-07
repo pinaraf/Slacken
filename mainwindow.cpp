@@ -91,6 +91,8 @@ void MainWindow::showChannelInTree(SlackChannel *chan)
 void MainWindow::on_channelTreeWidget_itemClicked(QTreeWidgetItem *item)
 {
     currentChannel = item->data(0, Qt::UserRole + 42).value<SlackChannel*>();
+    if (currentChannel == nullptr)
+        return;
     qDebug() << "Switching to " << currentChannel->id;
     client->requestHistory(currentChannel->id);
     item->setTextColor(0, QPalette().windowText().color());
@@ -316,6 +318,7 @@ void MainWindow::newMessageArrived(const QString &channel, const SlackMessage &m
     if (channel == currentChannel->id) {
         auto cursor = ui->historyView->textCursor();
         cursor.movePosition(QTextCursor::End);
+        cursor.setCharFormat(QTextCharFormat());
         cursor.insertBlock();
         renderMessage(cursor, message);
         cursor.movePosition(QTextCursor::NextBlock);
