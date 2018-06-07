@@ -276,6 +276,30 @@ void SlackClient::markChannelRead(const QString &channelType, const QString &cha
     });
 }
 
+void SlackClient::openConversation(const QString &channel) {
+    QVariantMap query;
+    query.insert("channel", channel);
+    auto reply = oauth2.post(QUrl("https://slack.com/api/conversations.join"), query);
+    connect(reply, &QNetworkReply::finished, [this, reply]() {
+        qDebug() << "Open conversation finished !";
+        qDebug() << reply->errorString();
+        QString whole_doc = reply->readAll();
+        qDebug() << whole_doc;
+    });
+}
+
+void SlackClient::openConversation(const QStringList &users) {
+    QVariantMap query;
+    query.insert("users", users.join(','));
+    auto reply = oauth2.post(QUrl("https://slack.com/api/conversations.open"), query);
+    connect(reply, &QNetworkReply::finished, [this, reply]() {
+        qDebug() << "Open conversation finished !";
+        qDebug() << reply->errorString();
+        QString whole_doc = reply->readAll();
+        qDebug() << whole_doc;
+    });
+}
+
 SlackChannel::SlackChannel(SlackClient *client, const QJsonValue &sourceRef)
     : QObject(client)
 {

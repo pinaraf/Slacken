@@ -123,6 +123,7 @@ void MainWindow::renderText(QTextCursor &cursor, const QString &text)
             if (client->hasUser(userId)) {
                 auto charFormat = cursor.charFormat();
                 charFormat.setFontWeight(QFont::Bold);
+                charFormat.setAnchorHref(QString("slack://im/%1").arg(userId));
                 cursor.setCharFormat(charFormat);
                 auto &user = client->user(userId);
                 cursor.insertText("@");
@@ -139,6 +140,21 @@ void MainWindow::renderText(QTextCursor &cursor, const QString &text)
             charFormat.setAnchorHref(capturedPart.mid(0, capturedPart.indexOf('|')).toString());
             cursor.setCharFormat(charFormat);
 
+            if (capturedPart.contains('|')) {
+                cursor.insertText(capturedPart.mid(capturedPart.indexOf('|') + 1).toString());
+            } else {
+                cursor.insertText(capturedPart.toString());
+            }
+            cursor.setCharFormat(QTextCharFormat());
+        } else if (capturedPart.startsWith('#')) {
+            QString channel = capturedPart.mid(1, capturedPart.indexOf('|') - 1).toString();
+            // This is a channel
+            auto charFormat = cursor.charFormat();
+            charFormat.setFontWeight(QFont::Bold);
+            charFormat.setAnchorHref(QString("slack://channel/%1").arg(channel));
+            cursor.setCharFormat(charFormat);
+
+            cursor.insertText("#");
             if (capturedPart.contains('|')) {
                 cursor.insertText(capturedPart.mid(capturedPart.indexOf('|') + 1).toString());
             } else {
@@ -350,8 +366,13 @@ void MainWindow::on_actionLogin_triggered()
 void MainWindow::on_historyView_anchorClicked(const QUrl &url)
 {
     if (url.scheme() == "slack") {
+        // XXX TODO : have a way to get a callback to the proper view.
         if (url.host() == "im") {
             qDebug() << "Open IM with " << url.path().mid(1);
+            client->openConversation(QStringList(url.path().mid(1)));
+        } else if (url.host() == "channel") {
+            qDebug() << "Open channel " << url.path().mid(1);
+            client->openConversation(url.path().mid(1));
         } else {
             qDebug() << "Unknown slack action " << url.host();
         }

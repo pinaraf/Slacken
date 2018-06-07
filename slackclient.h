@@ -106,6 +106,8 @@ public:
     // Todo : channelType as enum.
     void markChannelRead(const QString &channelType, const QString &channel, const QString &lastTimestamp);
 
+    void openConversation(const QStringList &users);
+    void openConversation(const QString &channel);
 signals:
     void authenticated();
     void hasBasicData();
