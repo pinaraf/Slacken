@@ -98,24 +98,32 @@ void SlackClient::start() {
         emit(hasBasicData());
         // Instanciate each channel and user
         for (const QJsonValueRef user: doc["users"].toArray()) {
-            emit userAdded(
-                m_users.emplace(user.toObject()["id"].toString(), SlackUser(user)).first->second
-            );
+            auto id = user.toObject()["id"].toString();
+            if (m_users.find(id) == m_users.end())
+                emit userAdded(
+                    m_users.emplace(id, SlackUser(user)).first->second
+                );
         }
         for (const QJsonValueRef channel: doc["channels"].toArray()) {
-            emit channelAdded(
-                m_channels.emplace(channel.toObject()["id"].toString(), new SlackChannel(this, channel)).first->second
-            );
+            auto id = channel.toObject()["id"].toString();
+            if (m_channels.find(id) == m_channels.end())
+                emit channelAdded(
+                    m_channels.emplace(id, new SlackChannel(this, channel)).first->second
+                );
         }
         for (const QJsonValueRef channel: doc["groups"].toArray()) {
-            emit channelAdded(
-                m_channels.emplace(channel.toObject()["id"].toString(), new SlackChannel(this, channel)).first->second
-            );
+            auto id = channel.toObject()["id"].toString();
+            if (m_channels.find(id) == m_channels.end())
+                emit channelAdded(
+                    m_channels.emplace(id, new SlackChannel(this, channel)).first->second
+                );
         }
         for (const QJsonValueRef channel: doc["ims"].toArray()) {
-            emit channelAdded(
-                m_channels.emplace(channel.toObject()["id"].toString(), new SlackChannel(this, channel)).first->second
-            );
+            auto id = channel.toObject()["id"].toString();
+            if (m_channels.find(id) == m_channels.end())
+                emit channelAdded(
+                    m_channels.emplace(id, new SlackChannel(this, channel)).first->second
+                );
         }
 
         //qDebug() << doc.toJson(QJsonDocument::Indented);
@@ -129,8 +137,8 @@ void SlackClient::start() {
         });
         connect(chaussette, &QWebSocket::disconnected, [this]() {
             qDebug() << "Chaussette hors ligne !";
-            chaussette->open(webSocketUrl);
-            fetchCounts();
+            chaussette->deleteLater();
+            start();
         });
         connect(chaussette, &QWebSocket::textMessageReceived, [this](const QString &msg) {
             qDebug() << "Chaussette in : " << msg;
@@ -168,17 +176,24 @@ void SlackClient::start() {
         webSocketUrl = QUrl(doc["url"].toString());
         qDebug() << "Chaussette vers ... " << webSocketUrl;
         chaussette->open(webSocketUrl);
-        QTimer *pingTimer = new QTimer(this);
+        QTimer *pingTimer = new QTimer(chaussette);
         pingTimer->setInterval(5000);
         pingTimer->setSingleShot(false);
         pingTimer->start();
         connect(pingTimer, &QTimer::timeout, [this] () {
             qDebug() << "Ping ws...";
             chaussette->ping();
+            // 3 pings missed
+            if (lastPong.secsTo(QDateTime::currentDateTime()) > 15) {
+                qDebug() << "Chaussette stopped answering !";
+                chaussette->close(QWebSocketProtocol::CloseCodeAbnormalDisconnection);
+            }
         });
         connect(chaussette, &QWebSocket::pong, [this] (quint64 elapsedTime, const QByteArray &) {
             qDebug() << "Pong " << elapsedTime;
+            lastPong = QDateTime::currentDateTime();
         });
+        lastPong = QDateTime::currentDateTime();
         socketMessageId = 0;
     });
 }

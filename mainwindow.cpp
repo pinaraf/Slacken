@@ -319,6 +319,7 @@ void MainWindow::newMessageArrived(const QString &channel, const SlackMessage &m
         auto cursor = ui->historyView->textCursor();
         cursor.movePosition(QTextCursor::End);
         cursor.setCharFormat(QTextCharFormat());
+        cursor.setBlockCharFormat(QTextCharFormat());
         cursor.insertBlock();
         renderMessage(cursor, message);
         cursor.movePosition(QTextCursor::NextBlock);
