@@ -129,6 +129,7 @@ private:
 
     QString m_teamName;
     QString selfId;
+    QUrl webSocketUrl;
     QWebSocket *chaussette;
     int socketMessageId;
     QOAuth2AuthorizationCodeFlow oauth2;

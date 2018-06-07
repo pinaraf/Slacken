@@ -127,8 +127,10 @@ void SlackClient::start() {
         connect(chaussette, &QWebSocket::connected, []() {
             qDebug() << "Chaussette en ligne !";
         });
-        connect(chaussette, &QWebSocket::disconnected, []() {
+        connect(chaussette, &QWebSocket::disconnected, [this]() {
             qDebug() << "Chaussette hors ligne !";
+            chaussette->open(webSocketUrl);
+            fetchCounts();
         });
         connect(chaussette, &QWebSocket::textMessageReceived, [this](const QString &msg) {
             qDebug() << "Chaussette in : " << msg;
@@ -163,8 +165,9 @@ void SlackClient::start() {
                 chaussette->sendTextMessage("{\"id\": 1, \"type\": \"message\", \"channel\": \"D4EPF2N22\", \"text\": \"LA CHAUSSETTE PARLE !\"}");*/
         });
 
-        qDebug() << "Chaussette vers ... " << doc["url"].toString();
-        chaussette->open(QUrl(doc["url"].toString()));
+        webSocketUrl = QUrl(doc["url"].toString());
+        qDebug() << "Chaussette vers ... " << webSocketUrl;
+        chaussette->open(webSocketUrl);
         socketMessageId = 0;
     });
 }
