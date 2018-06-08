@@ -112,6 +112,7 @@ public:
     bool hasUser(const QString &id) const;
     const SlackUser &user(const QString &id) const;
     QString userId(const QString &userName) const;
+    QString currentUserId() const;
 
     void requestHistory(const QString &id);
 

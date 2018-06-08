@@ -358,7 +358,10 @@ void MainWindow::newMessageArrived(const QString &channel, const SlackMessage &m
         cursor.movePosition(QTextCursor::NextBlock);
         ui->historyView->setTextCursor(cursor);
         // TODO : some focus jumble mumble : if window is not focused, don't mark read, wait until it is really seen/acted upon
-        currentChannel->markRead(message);
+
+        // You must *not* mark your own messages as read, it makes slack all fuzzy...
+        if (message.user != client->currentUserId())
+            currentChannel->markRead(message);
     }
 }
 

@@ -272,6 +272,11 @@ void SlackClient::sendMessage(const QString &channel, const QString &msgText)
     emit newMessage(channel, SlackMessage(selfId, msgText));
 }
 
+QString SlackClient::currentUserId() const
+{
+    return selfId;
+}
+
 void SlackClient::markChannelRead(const QString &channelType, const QString &channel, const QString &lastTimestamp) {
     QVariantMap query;
     query.insert("channel", channel);
