@@ -304,11 +304,12 @@ void MainWindow::channelHistoryAvailable(const QList<SlackMessage> &messages)
 
     currentChannel->markRead(sorted_messages.last());
 
-    //ui->historyView->setTextCursor(cursor);
-    /*QTimer::singleShot(100, [this]() {
-        ui->historyView->scrollToAnchor("last-read-marker");
-    });
-    ui->historyView->scrollToAnchor(lastReadMarker);*/
+    QTextCursor endOfDoc(ui->historyView->document());
+    endOfDoc.movePosition(QTextCursor::End);
+    // Go to the end
+    ui->historyView->setTextCursor(endOfDoc);
+    ui->historyView->ensureCursorVisible();
+    // Now force a scroll back
     ui->historyView->setTextCursor(lastReadPosition);
     ui->historyView->ensureCursorVisible();
 }
