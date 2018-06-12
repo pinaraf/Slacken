@@ -31,6 +31,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    currentChannel = nullptr;
     QSettings settings;
     settings.beginGroup("layout");
     if (settings.contains("splitter"))
@@ -227,7 +228,10 @@ void MainWindow::renderMessage(QTextCursor &cursor, const SlackMessage &message)
             }
             cursor.insertText("\t\t");
         }
-        cursor.insertText(attachment.text);
+        if (attachment.text.isEmpty() && !attachment.fallback.isEmpty())
+            cursor.insertText(attachment.fallback);
+        else
+            cursor.insertText(attachment.text);
         if (attachment.color.isValid()) {
             fmt.setForeground(foreground);
             cursor.setCharFormat(fmt);
@@ -348,6 +352,8 @@ void MainWindow::desktopNotificationArrived(const QString &title, const QString 
 
 void MainWindow::newMessageArrived(const QString &channel, const SlackMessage &message)
 {
+    if (!currentChannel)
+        return;
     qDebug() << "Received message on " << channel << " while on " << currentChannel->id;
     if (channel == currentChannel->id) {
         auto cursor = ui->historyView->textCursor();
