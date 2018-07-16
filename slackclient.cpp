@@ -161,7 +161,8 @@ void SlackClient::start() {
         });
         connect(chaussette, &QWebSocket::textMessageReceived, [this](const QString &msg) {
             qDebug() << "Chaussette in : " << msg;
-            auto doc = QJsonDocument::fromJson(msg.toUtf8());
+            auto jsonDoc = QJsonDocument::fromJson(msg.toUtf8());
+            auto doc = jsonDoc.object();
             QString type = doc["type"].toString();
             if (type == "message") {
                 // Mark the channel as having some unread things
@@ -170,7 +171,7 @@ void SlackClient::start() {
                     chanIt->second->setHasUnread(true);
                 }
                 // And send to everybody the information
-                emit(newMessage(doc["channel"].toString(), SlackMessage(doc.object())));
+                emit(newMessage(doc["channel"].toString(), SlackMessage(doc)));
             } else if (type == "desktop_notification") {
                 emit(desktopNotification(doc["title"].toString(), doc["subtitle"].toString(), doc["content"].toString()));
             } else if (type == "im_open" || type == "channel_joined" || type == "group_joined") {
@@ -185,7 +186,7 @@ void SlackClient::start() {
                 }
             } else if (type == "channel_created") {
                 emit channelAdded(
-                    m_channels.emplace(doc["id"].toString(), new SlackChannel(this, doc.object())).first->second
+                    m_channels.emplace(doc["id"].toString(), new SlackChannel(this, doc)).first->second
                 );
             }
             /*if (doc["type"] == "hello")
@@ -255,7 +256,7 @@ void SlackClient::requestHistory(const QString &id)
         auto doc = QJsonDocument::fromJson(whole_doc.toUtf8());
 
         QList<SlackMessage> messages;
-        for (const QJsonValueRef msgJson: doc["messages"].toArray()) {
+        for (const QJsonValueRef msgJson: doc.object()["messages"].toArray()) {
             messages << SlackMessage(msgJson.toObject());
         }
         qDebug() << "EMIT";
