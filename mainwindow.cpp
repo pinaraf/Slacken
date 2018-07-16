@@ -119,6 +119,15 @@ void MainWindow::on_channelTreeWidget_itemClicked(QTreeWidgetItem *item)
     auto cursor = ui->topicViewer->textCursor();
     renderText(cursor, currentChannel->topic);
 
+    client->getConversationView(currentChannel->id);
+    ui->membersListView->clear();
+    for (QString &member: currentChannel->members) {
+        if (client->hasUser(member)) {
+            auto item = new QListWidgetItem(ui->membersListView);
+            item->setText(client->user(member).name);
+            item->setData(Qt::UserRole + 42, member);
+        }
+    }
     ui->newMessage->setFocus();
 }
 
@@ -286,12 +295,15 @@ void MainWindow::channelHistoryAvailable(const QList<SlackMessage> &messages)
         if (message.when.date() != currentDate) {
             currentDate = message.when.date();
             cursor.insertBlock();
+            QTextCharFormat dateFormat;
+            dateFormat.setForeground(QBrush(QColor(200, 157, 0)));
+            cursor.setCharFormat(dateFormat);
             cursor.insertText("It's a brand new date - ");
             cursor.insertText(currentDate.toString());
         }
         cursor.insertBlock();
         cursor.movePosition(QTextCursor::NextBlock);
-
+        cursor.setCharFormat(QTextCharFormat());
         renderMessage(cursor, message);
 
 

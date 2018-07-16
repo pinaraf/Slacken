@@ -163,6 +163,19 @@ void SlackClient::start() {
             qDebug() << "Chaussette in : " << msg;
             auto jsonDoc = QJsonDocument::fromJson(msg.toUtf8());
             auto doc = jsonDoc.object();
+            if (doc["type"] == QJsonValue::Undefined) {
+                // Specific messages here...
+                // Return from a sent message ?
+                // {\"ok\":true,\"reply_to\":0,\"ts\":\"1531168989.000284\",\"text\":\"XXXX\"}
+                if ((doc["ok"] != QJsonValue::Undefined) && (doc["reply_to"] != QJsonValue::Undefined)) {
+                    auto source_msg = doc["reply_to"].toInt();
+                    auto pendingMessageIterator = m_pendingMessages.find(source_msg);
+                    if (pendingMessageIterator != m_pendingMessages.end()) {
+                        emit newMessage
+                    }
+		}
+                return;
+            }
             QString type = doc["type"].toString();
             if (type == "message") {
                 // Mark the channel as having some unread things
@@ -267,12 +280,14 @@ void SlackClient::requestHistory(const QString &id)
 void SlackClient::sendMessage(const QString &channel, const QString &msgText)
 {
     QJsonObject msg;
-    msg.insert("id", socketMessageId++);
+    int msg_id = socketMessageId++;
+    msg.insert("id", msg_id);
     msg.insert("type", "message");
     msg.insert("channel", channel);
     msg.insert("text", msgText);
     chaussette->sendTextMessage(QString::fromUtf8(QJsonDocument(msg).toJson()));
-    emit newMessage(channel, SlackMessage(selfId, msgText));
+    m_pendingMessages.insert(msg_id, SlackMessage(selfId, msgText));
+    //emit newMessage(channel, SlackMessage(selfId, msgText));
 }
 
 QString SlackClient::currentUserId() const
@@ -325,6 +340,20 @@ void SlackClient::openConversation(const QStringList &users) {
     });
 }
 
+void SlackClient::getConversationView(const QString &channel) {
+    QVariantMap query;
+    query.insert("channel", channel);
+    auto reply = oauth2.post(QUrl("https://slack.com/api/channels.info"), query);
+    connect(reply, &QNetworkReply::finished, [this, reply]() {
+        qDebug() << "View conversation finished !";
+        qDebug() << reply->errorString();
+        QString whole_doc = reply->readAll();
+        qDebug() << whole_doc;
+        // We will use that to update our channel members. This is known to be wrong, thanks slack.
+
+    });
+}
+
 SlackChannel::SlackChannel(SlackClient *client, const QJsonValue &sourceRef)
     : QObject(client)
 {
@@ -355,6 +384,11 @@ SlackChannel::SlackChannel(SlackClient *client, const QJsonValue &sourceRef)
             is_member   = source["is_member"].toBool();
     }
 
+    if (source.contains("members")) {
+        for (auto member: source["members"].toArray()) {
+            members.append(member.toString());
+        }
+    }
     if (source.contains("topic")) {
         auto topicObject = source["topic"].toObject();
         topic = topicObject["value"].toString();

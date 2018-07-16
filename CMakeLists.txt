@@ -9,6 +9,8 @@ set(CMAKE_AUTORCC ON)
 
 find_package(Qt5 5.9 CONFIG REQUIRED Widgets WebSockets Network NetworkAuth)
 
+# set(CMAKE_CXX_FLAGS "-g -fsanitize=address -fno-omit-frame-pointer")
+
 set(SLACKEN_SRCS 
 	mainwindow.ui main.qrc
 	main.cpp mainwindow.cpp slackclient.cpp 
@@ -16,4 +18,4 @@ set(SLACKEN_SRCS
 
 add_executable(slacken ${SLACKEN_SRCS})
 target_link_libraries(slacken PUBLIC Qt5::Widgets Qt5::WebSockets Qt5::Network Qt5::NetworkAuth)
-## target_include_directories(slacken PUBLIC ${
+

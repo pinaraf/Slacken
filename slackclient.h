@@ -37,6 +37,8 @@ class SlackChannel : public QObject
 public:
     SlackChannel(SlackClient *client, const QJsonValue &source);
 
+    // TODO : QVector<SlackUser*> ?
+    QStringList members;
     QDateTime created;
     QDateTime last_read;
     QString id;
@@ -126,6 +128,8 @@ public:
 
     void openConversation(const QStringList &users);
     void openConversation(const QString &channel);
+
+    void getConversationView(const QString &channel);
 signals:
     void authenticated();
     void hasBasicData();
@@ -156,6 +160,7 @@ private:
     QOAuth2AuthorizationCodeFlow oauth2;
     std::map<QString, SlackChannel*> m_channels;
     std::map<QString, SlackUser> m_users;
+    std::map<QString, SlackMessage> m_pendingMessages;
 };
 
 #endif // SLACKCLIENT_H
