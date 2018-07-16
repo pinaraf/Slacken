@@ -79,10 +79,11 @@ void SlackClient::fetchCounts() {
     query.insert("simple_unreads", true);
     auto replyCount = oauth2.post(QUrl("https://slack.com/api/users.counts"), query);
     connect(replyCount, &QNetworkReply::finished, [this, replyCount]() {
-        auto doc = QJsonDocument::fromJson(replyCount->readAll());
-        QFile f("/tmp/users.counts.json");
+        auto jsonDoc = QJsonDocument::fromJson(replyCount->readAll());
+        auto doc = jsonDoc.object();
+        /*QFile f("/tmp/users.counts.json");
         f.open(QIODevice::WriteOnly);
-        f.write(doc.toJson(QJsonDocument::Indented));
+        f.write(doc.toJson(QJsonDocument::Indented));*/
 
         auto setUnreads = [&] (const QString &listPath) {
             for (const QJsonValueRef channel: doc[listPath].toArray()) {
