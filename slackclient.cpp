@@ -107,7 +107,8 @@ void SlackClient::start() {
 
         this->fetchCounts();
 
-        auto doc = QJsonDocument::fromJson(reply->readAll());
+        auto jsonDoc = QJsonDocument::fromJson(reply->readAll());
+        auto doc = jsonDoc.object();
 
         selfId = doc["self"].toObject()["id"].toString();
         m_teamName = doc["team"].toObject()["name"].toString();
