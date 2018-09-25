@@ -163,17 +163,21 @@ void SlackClient::start() {
             qDebug() << "Chaussette in : " << msg;
             auto jsonDoc = QJsonDocument::fromJson(msg.toUtf8());
             auto doc = jsonDoc.object();
-            if (doc["type"] == QJsonValue::Undefined) {
+            if (doc["type"] == QJsonValue::Null) {
+                qDebug() << "Got an undefined";
                 // Specific messages here...
                 // Return from a sent message ?
                 // {\"ok\":true,\"reply_to\":0,\"ts\":\"1531168989.000284\",\"text\":\"XXXX\"}
-                if ((doc["ok"] != QJsonValue::Undefined) && (doc["reply_to"] != QJsonValue::Undefined)) {
+                if ((doc["ok"] != QJsonValue::Null) && (doc["reply_to"] != QJsonValue::Null)) {
                     auto source_msg = doc["reply_to"].toInt();
+                    qDebug() << "Trying to find the source...";
                     auto pendingMessageIterator = m_pendingMessages.find(source_msg);
                     if (pendingMessageIterator != m_pendingMessages.end()) {
-                        emit newMessage
+                        emit(newMessage(std::get<0>(pendingMessageIterator.value()),
+                                        std::get<1>(pendingMessageIterator.value())));
+                        m_pendingMessages.remove(source_msg);
                     }
-		}
+                }
                 return;
             }
             QString type = doc["type"].toString();
@@ -286,7 +290,8 @@ void SlackClient::sendMessage(const QString &channel, const QString &msgText)
     msg.insert("channel", channel);
     msg.insert("text", msgText);
     chaussette->sendTextMessage(QString::fromUtf8(QJsonDocument(msg).toJson()));
-    m_pendingMessages.insert(msg_id, SlackMessage(selfId, msgText));
+    auto &&pendingMessage = std::make_tuple(channel, SlackMessage(selfId, msgText));
+    m_pendingMessages.insert(msg_id, pendingMessage);
     //emit newMessage(channel, SlackMessage(selfId, msgText));
 }
 

@@ -336,7 +336,7 @@ void MainWindow::on_newMessage_returnPressed()
     QString msg = ui->newMessage->text();
 
     // Trying to match @XXX to users
-    QRegularExpression userRegex("(?:\\W|^)(@\\w+)(?:\\W|$)");
+    QRegularExpression userRegex("(?:\\W|^)(@[\\w\\-]+)(?:\\W|$)");
     QRegularExpressionMatch match;
     int offset = 0;
     while ((match = userRegex.match(msg, offset)).hasMatch()) {

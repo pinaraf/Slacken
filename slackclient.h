@@ -160,7 +160,7 @@ private:
     QOAuth2AuthorizationCodeFlow oauth2;
     std::map<QString, SlackChannel*> m_channels;
     std::map<QString, SlackUser> m_users;
-    std::map<QString, SlackMessage> m_pendingMessages;
+    QMap<int, std::tuple<QString, SlackMessage>> m_pendingMessages;
 };
 
 #endif // SLACKCLIENT_H
