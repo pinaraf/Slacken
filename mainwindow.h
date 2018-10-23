@@ -59,15 +59,21 @@ private slots:
 
     void on_historyView_highlighted(const QString &arg1);
 
+    void on_actionNewNetwork_triggered();
+
 private:
-    void showChannelInTree(SlackChannel *channel);
+    void showChannelInTree(SlackClient *client, SlackChannel *channel);
 
     void renderText(QTextCursor &cursor, const QString &text);
     void renderMessage(QTextCursor &cursor, const SlackMessage &message);
+    void addSlackClient(int idx, SlackClient *client, QString name, QString token);
 
     Ui::MainWindow *ui;
+
+    // TODO : get rid of these, bad race conditions happen here !
     SlackChannel *currentChannel;
-    SlackClient *client; // Todo : drop this for multi-team...
+    SlackClient *currentClient;
+
     QSystemTrayIcon *tray;
     QList<QTreeWidgetItem*> clients;
 };

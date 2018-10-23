@@ -32,6 +32,7 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
     currentChannel = nullptr;
+    currentClient = nullptr;
     QSettings settings;
     settings.beginGroup("layout");
     if (settings.contains("splitter"))
@@ -42,28 +43,56 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(tray, &QSystemTrayIcon::activated, [this](QSystemTrayIcon::ActivationReason) {
         this->show();
     });
-    client = new SlackClient(this);
 
-    clients.append(new QTreeWidgetItem(ui->channelTreeWidget));
-    clients[0]->setText(0, "Pending...");
+    settings.endGroup();
+    settings.beginGroup("networks");
+    QStringList netNames = settings.value("name").toStringList();
+    QStringList netTokens = settings.value("token").toStringList();
+    settings.endGroup();
 
-    connect(client, &SlackClient::hasBasicData, [this]() {
-        clients[0]->setText(0, client->teamName());
-    });
-    connect(client, &SlackClient::authenticated, [this]() {
+    for (int i = 0 ; i < netNames.size() ; i++) {
+        addSlackClient(i, new SlackClient(this), netNames[i], netTokens[i]);
+    }
+}
+
+void MainWindow::addSlackClient(int idx, SlackClient *client, QString name, QString token)
+{
+    QTreeWidgetItem *rootItem = new QTreeWidgetItem(ui->channelTreeWidget);
+    rootItem->setData(0, Qt::UserRole + 42, QVariant::fromValue(client));
+    rootItem->setData(0, Qt::UserRole + 43, token);
+
+    clients.append(rootItem);
+    if (!name.isEmpty())
+        rootItem->setText(0, name);
+    else
+        rootItem->setText(0, "Pending...");
+
+    connect(client, &SlackClient::hasBasicData, [rootItem, idx, client, this]() {
+        rootItem->setText(0, client->teamName());
+
         QSettings settings;
-        settings.beginGroup("auth");
-        settings.setValue("token", client->currentToken());
+        settings.beginGroup("networks");
+        QStringList currentNames = settings.value("name", QStringList()).toStringList();
+        currentNames[idx] = client->teamName();
+        settings.setValue("name", currentNames);
+        settings.sync();
+    });
+    connect(client, &SlackClient::authenticated, [client, idx]() {
+        QSettings settings;
+        settings.beginGroup("networks");
+        QStringList currentTokens = settings.value("token", QStringList()).toStringList();
+        currentTokens[idx] = client->currentToken();
+        settings.setValue("token", currentTokens);
         settings.sync();
         client->start();
     });
-    connect(client, &SlackClient::channelAdded, [this](SlackChannel *chan) {
+    connect(client, &SlackClient::channelAdded, [client, this](SlackChannel *chan) {
         if (chan->is_member) {
-            this->showChannelInTree(chan);
+            this->showChannelInTree(client, chan);
         }
     });
-    connect(client, &SlackClient::channelJoined, [this](SlackChannel *chan) {
-        this->showChannelInTree(chan);
+    connect(client, &SlackClient::channelJoined, [client, this](SlackChannel *chan) {
+        this->showChannelInTree(client, chan);
     });
     connect(client, &SlackClient::channelHistory, this, &MainWindow::channelHistoryAvailable);
     connect(client, &SlackClient::newMessage, this, &MainWindow::newMessageArrived);
@@ -75,7 +104,7 @@ MainWindow::~MainWindow()
     delete ui;
 }
 
-void MainWindow::showChannelInTree(SlackChannel *chan)
+void MainWindow::showChannelInTree(SlackClient *client, SlackChannel *chan)
 {
     QString display = chan->name;
     if (chan->is_channel)
@@ -83,7 +112,18 @@ void MainWindow::showChannelInTree(SlackChannel *chan)
     else if (chan->is_group)
         display = QString("&%1").arg(chan->name);
 
-    auto item = new QTreeWidgetItem(clients[0]);
+    // Find out the proper root item
+    QTreeWidgetItem *targetRoot = nullptr;
+    for (int i = 0 ; i < ui->channelTreeWidget->topLevelItemCount() ; i++) {
+        auto topLevelItem = ui->channelTreeWidget->topLevelItem(i);
+        SlackClient *thisClient = topLevelItem->data(0, Qt::UserRole + 42).value<SlackClient*>();
+        if (thisClient == client)
+            targetRoot = topLevelItem;
+    }
+    if (targetRoot == nullptr)
+        return;
+
+    auto item = new QTreeWidgetItem(targetRoot);
     item->setText(0, display);
     item->setData(0, Qt::UserRole + 42, QVariant::fromValue(chan));
     if (chan->has_unread) {
@@ -102,8 +142,8 @@ void MainWindow::showChannelInTree(SlackChannel *chan)
             item->setFont(0, font);
         }
     });
-    clients[0]->addChild(item);
-    clients[0]->sortChildren(0, Qt::AscendingOrder);
+    targetRoot->addChild(item);
+    targetRoot->sortChildren(0, Qt::AscendingOrder);
 }
 
 void MainWindow::on_channelTreeWidget_itemClicked(QTreeWidgetItem *item)
@@ -112,19 +152,20 @@ void MainWindow::on_channelTreeWidget_itemClicked(QTreeWidgetItem *item)
     if (currentChannel == nullptr)
         return;
     qDebug() << "Switching to " << currentChannel->id;
-    client->requestHistory(currentChannel->id);
+    currentClient = item->parent()->data(0, Qt::UserRole + 42).value<SlackClient*>();
+    currentClient->requestHistory(currentChannel->id);
     item->setTextColor(0, QPalette().windowText().color());
     ui->topicViewer->clear();
 
     auto cursor = ui->topicViewer->textCursor();
     renderText(cursor, currentChannel->topic);
 
-    client->getConversationView(currentChannel->id);
+    currentClient->getConversationView(currentChannel->id);
     ui->membersListView->clear();
     for (QString &member: currentChannel->members) {
-        if (client->hasUser(member)) {
+        if (currentClient->hasUser(member)) {
             auto item = new QListWidgetItem(ui->membersListView);
-            item->setText(client->user(member).name);
+            item->setText(currentClient->user(member).name);
             item->setData(Qt::UserRole + 42, member);
         }
     }
@@ -147,12 +188,12 @@ void MainWindow::renderText(QTextCursor &cursor, const QString &text)
 
         if (capturedPart.startsWith('@')) {
             QString userId = capturedPart.mid(1).toString();
-            if (client->hasUser(userId)) {
+            if (currentClient->hasUser(userId)) {
                 auto charFormat = cursor.charFormat();
                 charFormat.setFontWeight(QFont::Bold);
                 charFormat.setAnchorHref(QString("slack://im/%1").arg(userId));
                 cursor.setCharFormat(charFormat);
-                auto &user = client->user(userId);
+                auto &user = currentClient->user(userId);
                 cursor.insertText("@");
                 cursor.insertText(user.name);
                 cursor.setCharFormat(QTextCharFormat());
@@ -206,8 +247,8 @@ void MainWindow::renderMessage(QTextCursor &cursor, const SlackMessage &message)
     // Display user
     QString userDisplay = "\t<%1>\t";
     if (!message.user.isEmpty()) {
-        if (client->hasUser(message.user)) {
-            auto user = client->user(message.user);
+        if (currentClient->hasUser(message.user)) {
+            auto user = currentClient->user(message.user);
             userDisplay = userDisplay.arg(user.name);
             QTextCharFormat fmt;
             fmt.setAnchorHref(QString("slack://im/%1").arg(message.user));
@@ -341,7 +382,7 @@ void MainWindow::on_newMessage_returnPressed()
     int offset = 0;
     while ((match = userRegex.match(msg, offset)).hasMatch()) {
         //qDebug() << match.capturedTexts();
-        QString id = client->userId(match.captured(1).mid(1));
+        QString id = currentClient->userId(match.captured(1).mid(1));
         if (!id.isNull()) {
             msg = QString("%1<@%2>%3")
                     .arg(msg.mid(0, match.capturedStart(1)))
@@ -353,7 +394,7 @@ void MainWindow::on_newMessage_returnPressed()
         }
     }
     //qDebug() << msg;
-    client->sendMessage(currentChannel->id, msg);
+    currentClient->sendMessage(currentChannel->id, msg);
     ui->newMessage->clear();
 }
 
@@ -379,7 +420,7 @@ void MainWindow::newMessageArrived(const QString &channel, const SlackMessage &m
         // TODO : some focus jumble mumble : if window is not focused, don't mark read, wait until it is really seen/acted upon
 
         // You must *not* mark your own messages as read, it makes slack all fuzzy...
-        if (message.user != client->currentUserId())
+        if (message.user != currentClient->currentUserId())
             currentChannel->markRead(message);
     }
 }
@@ -391,14 +432,12 @@ void MainWindow::on_actionQuit_triggered()
 
 void MainWindow::on_actionLogin_triggered()
 {
-    QSettings settings;
-    settings.beginGroup("auth");
-    if (settings.contains("token")) {
-        client->login(settings.value("token").toString());
-    } else {
-        QMessageBox::information(this, "OAuth authentication", "A new webbrowser window will open for you to login. It will contact Slacken back on the loopback for authentication purpose.\n"
-                                                               "Make sure extensions like NoScript won't block that as a XSS attack.");
-        client->login(QString());
+    for (int i = 0 ; i < ui->channelTreeWidget->topLevelItemCount() ; i++) {
+        auto topLevelItem = ui->channelTreeWidget->topLevelItem(i);
+        SlackClient *client = topLevelItem->data(0, Qt::UserRole + 42).value<SlackClient*>();
+        QString token = topLevelItem->data(0, Qt::UserRole + 43).toString();
+
+        client->login(token);
     }
 }
 
@@ -408,10 +447,10 @@ void MainWindow::on_historyView_anchorClicked(const QUrl &url)
         // XXX TODO : have a way to get a callback to the proper view.
         if (url.host() == "im") {
             qDebug() << "Open IM with " << url.path().mid(1);
-            client->openConversation(QStringList(url.path().mid(1)));
+            currentClient->openConversation(QStringList(url.path().mid(1)));
         } else if (url.host() == "channel") {
             qDebug() << "Open channel " << url.path().mid(1);
-            client->openConversation(url.path().mid(1));
+            currentClient->openConversation(url.path().mid(1));
         } else {
             qDebug() << "Unknown slack action " << url.host();
         }
@@ -434,4 +473,18 @@ void MainWindow::on_splitter_splitterMoved(int, int)
 void MainWindow::on_historyView_highlighted(const QString &arg1)
 {
     ui->statusBar->showMessage(arg1, 1000);
+}
+
+void MainWindow::on_actionNewNetwork_triggered()
+{
+    // TODO : Start the whole login process here, and save the right name immediately
+    // and save the new client when we are done login.
+
+    QMessageBox::information(this, "OAuth authentication", "A new webbrowser window will open for you to login. It will contact Slacken back on the loopback for authentication purpose.\n"
+                                                           "Make sure extensions like NoScript won't block that as a XSS attack.");
+
+    SlackClient *newClient = new SlackClient(this);
+    newClient->login(QString());
+
+    addSlackClient(ui->channelTreeWidget->topLevelItemCount(), newClient, QString(), QString());
 }
